@@ -1,46 +1,69 @@
-# TikTok Live Chat Reader (TTS + Overlay)
+# TikTok Live Chat Reader (Thai TTS + Overlay)
 
-อ่านคอมเมนต์จาก TikTok Live แบบ real-time พร้อมอ่านออกเสียง (TTS) และแสดงบนหน้าจอ (overlay) สำหรับใช้กับ OBS/Streamlabs
+Real-time TikTok LIVE chat overlay for OBS/Streamlabs. Shows chat, gift, and viewer-join events as
+styled cards, and reads chat comments aloud in Thai.
 
-## ติดตั้ง
+## Install
 
 ```bash
 npm install
 ```
 
-## รัน
+## Configure
 
-Windows PowerShell:
-```powershell
-$env:TIKTOK_USERNAME = "your_tiktok_username"
-npm start
+Copy `.env.example` to `.env` and fill in your TikTok username:
+
+```
+TIKTOK_USERNAME=your_tiktok_username
+WS_PORT=8081
+HTTP_PORT=8080
 ```
 
-Bash:
+The account must be **currently live** or the connection will fail (it retries automatically every
+10 seconds, so you can start the server before going live).
+
+## Run
+
 ```bash
-TIKTOK_USERNAME=your_tiktok_username npm start
-```
-
-ต้องเป็น username ของบัญชีที่ **กำลัง live อยู่จริง** ไม่งั้นจะ connect ไม่ติด
-
-## ทดสอบแบบ Mock (ไม่ต้อง live จริง)
-
-```powershell
-$env:MOCK = "1"
 npm start
 ```
 
-จะยิงคอมเมนต์ปลอมทุก 2.5 วิ ให้เปิด `http://localhost:8080` ดูใน browser เพื่อดู overlay + ฟัง TTS ได้เลย
+## Test without a live session (mock mode)
 
-## ใช้งานกับ OBS/Streamlabs
+```powershell
+$env:MOCK = "1"; npm start
+```
 
-1. รัน `npm start` ทิ้งไว้ (จะเปิด HTTP server ที่ `http://localhost:8080`)
-2. ใน OBS/Streamlabs: เพิ่ม **Browser Source** ใหม่ → ใส่ URL `http://localhost:8080`
-3. ตั้งขนาด/ตำแหน่งให้ซ้อนภาพตามต้องการ
-4. เสียง TTS จะออกทาง speaker เครื่อง — ถ้าต้องการให้เสียงลงไปในสตรีมด้วย ให้ตั้งค่า audio capture ของ browser source ใน OBS ให้จับเสียงจากหน้านั้น (Interact → หรือใช้ desktop audio capture)
+Generates fake chat, gift, and member-join events on intervals so you can preview the overlay and hear
+TTS without an active TikTok live session.
 
-## หมายเหตุ
+## Use with OBS/Streamlabs
 
-- ใช้ library `tiktok-live-connector` v2 (unofficial) — เชื่อมต่อฟรีด้วย username เฉยๆ ได้ แต่เบื้องหลังพึ่งบริการ signing จาก [Euler Stream](https://www.eulerstream.com/) (บุคคลที่สาม) ซึ่งมี **rate limit ฟรี** อยู่ — ถ้าใช้งานหนัก/เชื่อมต่อบ่อยเกิน อาจโดน throttle ต้องสมัคร `signApiKey` เพิ่ม (มีค่าใช้จ่าย)
-- มีความเสี่ยงพังถ้า TikTok เปลี่ยนระบบภายใน เพราะเป็น unofficial reverse-engineered library
-- TTS ใช้ Web Speech API ของเบราว์เซอร์ (ฟรี) — ถ้าอยากได้เสียงธรรมชาติกว่านี้ ค่อยเปลี่ยนไปใช้ `edge-tts` ทีหลังได้
+1. Run `npm start` and leave it running.
+2. In OBS/Streamlabs: add a new **Browser Source** → URL `http://localhost:8080`.
+3. Resize/position it over your scene as needed.
+4. To interact with the TTS mute button while it's a Browser Source, right-click the source → **Interact**.
+5. TTS audio plays through the overlay page's own audio — capture it in OBS via the Browser Source's
+   audio output (or desktop audio capture).
+
+## How it works
+
+- **`server.js`** connects to the TikTok room via `tiktok-live-connector`, normalizes chat/gift/member
+  events, and rebroadcasts them over a local WebSocket. It also serves `overlay.html` and proxies
+  Google Translate's TTS endpoint (`/tts`) and `canvas-confetti` (`/vendor/confetti.js`) so the overlay
+  works without hitting external CDNs at runtime.
+- **`overlay.html`** is a single-file frontend: renders chat/gift/member cards, drives TTS playback, and
+  has a mute toggle (persisted in `localStorage`).
+
+See [`CONTEXT.md`](./CONTEXT.md) for the project's domain language (Gift streak, Repeat flood, Pattern
+collapse, etc.) and [`docs/plan-current-overlay-features.md`](./docs/plan-current-overlay-features.md)
+for the design decisions behind them.
+
+## Notes / caveats
+
+- Uses `tiktok-live-connector` v2 (unofficial). Connecting with just a username is free, but it relies on
+  a third-party signing service ([Euler Stream](https://www.eulerstream.com/)) that has a free rate limit —
+  heavy or frequent reconnects may get throttled; a paid `signApiKey` lifts that limit.
+- Being an unofficial, reverse-engineered library, it can break if TikTok changes its internal protocol.
+- TTS uses Google Translate's public `translate_tts` endpoint (free, no API key, no official SLA). If it
+  ever becomes unreliable, switching to a paid provider (Google Cloud TTS, Azure TTS) is the fallback path.

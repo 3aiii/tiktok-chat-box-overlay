@@ -1,0 +1,16 @@
+{
+  "name": "tiktok-live-reader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.4",
+    "dotenv": "^17.4.2",
+    "tiktok-live-connector": "^2.4.3",
+    "ws": "^8.18.0"
+  }
+}

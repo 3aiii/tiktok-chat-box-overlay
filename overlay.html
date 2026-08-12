@@ -4,108 +4,157 @@
 <meta charset="utf-8" />
 <title>TikTok Live Chat Overlay</title>
 <style>
+  @font-face {
+    font-family: "Kanit";
+    src: url("/fonts/Kanit-Regular.ttf") format("truetype");
+    font-weight: 400;
+  }
+  @font-face {
+    font-family: "Kanit";
+    src: url("/fonts/Kanit-Medium.ttf") format("truetype");
+    font-weight: 500;
+  }
+  @font-face {
+    font-family: "Kanit";
+    src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
+    font-weight: 600;
+  }
+  @font-face {
+    font-family: "Kanit";
+    src: url("/fonts/Kanit-Bold.ttf") format("truetype");
+    font-weight: 700;
+  }
+  @font-face {
+    font-family: "Kanit";
+    src: url("/fonts/Kanit-ExtraBold.ttf") format("truetype");
+    font-weight: 800;
+  }
   html, body {
     margin: 0;
     padding: 0;
     background: transparent;
-    font-family: "Segoe UI", "Sarabun", sans-serif;
+    font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
     overflow: hidden;
   }
   #chat-box {
     position: fixed;
     bottom: 24px;
-    left: 24px;
-    width: 480px;
+    right: 24px;
+    width: 580px;
     max-height: 60vh;
     display: flex;
     flex-direction: column-reverse;
-    gap: 10px;
+    gap: 12px;
     overflow: hidden;
+  }
+  #chat-box.overflowing {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 60px);
+    mask-image: linear-gradient(to bottom, transparent, black 60px);
   }
   .chat-line {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(18, 16, 26, 0.65);
-    color: #fff;
-    padding: 9px 16px 9px 9px;
-    border-radius: 20px 20px 20px 4px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.5);
-    font-size: 17px;
-    line-height: 1.4;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
     animation: slide-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
-    word-break: break-word;
+    max-width: 100%;
   }
+  .line-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-right: 16px;
+    margin-bottom: -12px;
+    z-index: 1;
+  }
+  .badge {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+  }
+  .badge img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+  .badge-gift { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+  .badge-member { background: linear-gradient(135deg, #f472b6, #ec4899); }
   .avatar {
     flex: 0 0 auto;
-    width: 36px;
-    height: 36px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
+    background: linear-gradient(135deg, #7c5cff, #22c1c3);
     color: #fff;
-    font-weight: 700;
-    font-size: 15px;
-    padding: 2px;
-    background-clip: content-box, border-box;
-    background-origin: content-box, border-box;
+    font-weight: 800;
+    font-size: 14px;
     text-transform: uppercase;
     overflow: hidden;
-    position: relative;
-  }
-  .avatar::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    padding: 2px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.05));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
+    /* box-shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.5); */
   }
   .avatar img {
-    position: absolute;
-    inset: 0;
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 50%;
+    object-position: center;
   }
-  .chat-body { min-width: 0; }
-  .chat-line .nickname {
-    color: #ffd54a;
-    font-weight: 700;
-    font-size: 14.5px;
-    margin-right: 6px;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  .nickname {
+    background: rgba(255, 246, 232, 0.92);
+    color: #5a3418;
+    font-weight: 800;
+    font-size: 16px;
+    padding: 6px 17px;
+    border-radius: 999px;
+    box-shadow: 0 4px 10px -4px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
   }
-  .chat-line .comment {
-    color: #f2f2f5;
+  .bubble {
+    background: linear-gradient(150deg, #ffd9a8, #ffaf5e);
+    color: #4a2600;
+    padding: 17px 22px 12px;
+    border-radius: 26px 26px 8px 26px;
+    box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5);
+    font-size: 19px;
+    line-height: 1.4;
+    word-break: break-word;
   }
-  .gift-line {
-    background: linear-gradient(120deg, rgba(120, 78, 10, 0.85), rgba(200, 140, 30, 0.85), rgba(120, 78, 10, 0.85));
+  .comment { color: #4a2600; }
+  .gift-line .bubble {
+    background: linear-gradient(120deg, #ffe259, #d4900a, #ffe259);
     background-size: 220% 220%;
-    border: 1px solid rgba(255, 210, 100, 0.5);
-    align-items: center;
-    animation: slide-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1), shimmer 3s ease-in-out infinite;
-  }
-  .gift-line .nickname { color: #fff3c4; }
-  .member-line {
-    background: rgba(20, 40, 30, 0.55);
-    border: 1px solid rgba(120, 230, 160, 0.35);
-    font-size: 15px;
-    padding-top: 7px;
-    padding-bottom: 7px;
-  }
-  .member-line .nickname { color: #8ef0ac; }
-  .member-line .comment { color: rgba(255, 255, 255, 0.75); }
-  .gift-count {
-    color: #ffe27a;
+    color: #3d2400;
     font-weight: 700;
+    font-size: 20px;
+    border: 2px solid rgba(255, 224, 130, 0.95);
+    box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5), 0 0 22px -2px rgba(255, 190, 40, 0.65);
+    animation: shimmer 3s ease-in-out infinite;
+  }
+  .gift-line .comment { color: #3d2400; }
+  .gift-line .nickname {
+    background: linear-gradient(135deg, #ffe259, #d4900a);
+    color: #3d2400;
+    box-shadow: 0 4px 10px -4px rgba(0, 0, 0, 0.45), 0 0 12px -2px rgba(255, 190, 40, 0.5);
+  }
+  .member-line .bubble {
+    background: linear-gradient(150deg, #ffe8c9, #ffcf94);
+    font-size: 18px;
+  }
+  .gift-count {
+    color: #3d2400;
+    font-weight: 800;
     display: inline-block;
     animation: pop 0.4s ease-out;
   }
@@ -119,12 +168,13 @@
     100% { transform: scale(1); }
   }
   .gift-icon {
-    flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
+    display: block;
+    width: 42px;
+    height: 42px;
     object-fit: contain;
+    object-position: center;
+    margin: 6px auto 0;
     animation: pop 0.4s ease-out;
-    margin-left: auto;
   }
   @keyframes slide-in {
     from { opacity: 0; transform: translateY(14px) scale(0.97); }
@@ -133,7 +183,7 @@
   #tts-toggle {
     position: fixed;
     bottom: calc(60vh + 24px + 10px);
-    left: 24px;
+    right: 24px;
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -229,7 +279,7 @@
         particleCount: 60,
         spread: 65,
         startVelocity: 45,
-        origin: { x: 0.15, y: 0.85 },
+        origin: { x: 0.85, y: 0.85 },
         colors: ["#ffd54a", "#ff8a5c", "#ff5b7a", "#7c5cff"],
       });
     }
@@ -266,33 +316,29 @@
       };
     }
 
-    // Consistent, distinct color per nickname so avatars stay recognizable
-    // across messages without needing real profile pictures.
-    const AVATAR_COLORS = ["#ff5b7a", "#7c5cff", "#22c1c3", "#f7b733", "#3fa9f5", "#ff8a5c", "#8bd346"];
-
-    function colorForName(name) {
-      let hash = 0;
-      for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-      return AVATAR_COLORS[hash % AVATAR_COLORS.length];
-    }
-
-    function createAvatar(nickname, avatarUrl) {
+    // Real TikTok profile picture only — no letter-avatar fallback. Returns
+    // null when there's no avatarUrl, or removes itself from the DOM if the
+    // CDN image fails to load.
+    function createAvatar(avatarUrl) {
+      if (!avatarUrl) return null;
       const avatar = document.createElement("div");
       avatar.className = "avatar";
-      avatar.style.background = colorForName(nickname);
-      avatar.textContent = (nickname.trim()[0] || "?");
-
-      if (avatarUrl) {
-        const img = document.createElement("img");
-        img.src = avatarUrl;
-        img.alt = "";
-        img.referrerPolicy = "no-referrer";
-        // If the TikTok CDN url fails to load, fall back to the letter avatar
-        // that's already sitting behind it.
-        img.onerror = () => img.remove();
-        avatar.appendChild(img);
-      }
+      const img = document.createElement("img");
+      img.src = avatarUrl;
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      img.onerror = () => avatar.remove();
+      avatar.appendChild(img);
       return avatar;
+    }
+
+    // Small role badge shown next to the avatar (only for gift/member lines,
+    // matching the reference design where plain chat has no badge).
+    function createBadge(badgeClass, fallbackEmoji) {
+      const badge = document.createElement("div");
+      badge.className = `badge ${badgeClass}`;
+      badge.textContent = fallbackEmoji;
+      return badge;
     }
 
     function pushLine(line) {
@@ -300,34 +346,44 @@
       while (chatBox.children.length > MAX_LINES) {
         chatBox.removeChild(chatBox.lastChild);
       }
+      // Only fade the top edge once messages actually overflow the box —
+      // otherwise a single early comment gets faded for no reason.
+      chatBox.classList.toggle("overflowing", chatBox.scrollHeight > chatBox.clientHeight);
+    }
+
+    function buildLine(extraClass, nickname, avatarUrl, badge) {
+      const line = document.createElement("div");
+      line.className = extraClass ? `chat-line ${extraClass}` : "chat-line";
+
+      const header = document.createElement("div");
+      header.className = "line-header";
+      const avatar = createAvatar(avatarUrl);
+      if (avatar) header.appendChild(avatar);
+      if (badge) header.appendChild(badge);
+      const nick = document.createElement("span");
+      nick.className = "nickname";
+      nick.textContent = nickname;
+      header.appendChild(nick);
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+
+      line.appendChild(header);
+      line.appendChild(bubble);
+      return { line, bubble };
     }
 
     function addChatLine(nickname, comment, avatarUrl) {
-      const line = document.createElement("div");
-      line.className = "chat-line";
-
-      const body = document.createElement("div");
-      body.className = "chat-body";
-      body.innerHTML = `<span class="nickname">${escapeHtml(nickname)}</span><span class="comment">${escapeHtml(comment)}</span>`;
-
-      line.appendChild(createAvatar(nickname, avatarUrl));
-      line.appendChild(body);
+      const { line, bubble } = buildLine("", nickname, avatarUrl, null);
+      bubble.innerHTML = `<span class="comment">${escapeHtml(comment)}</span>`;
       pushLine(line);
     }
 
     function addGiftLine(nickname, giftName, repeatCount, avatarUrl, giftImage) {
-      const line = document.createElement("div");
-      line.className = "chat-line gift-line";
-
-      const body = document.createElement("div");
-      body.className = "chat-body";
+      const badge = createBadge("badge-gift", "🎁");
+      const { line, bubble } = buildLine("gift-line", nickname, avatarUrl, badge);
       const times = repeatCount > 1 ? ` <span class="gift-count">x${repeatCount}</span>` : "";
-      body.innerHTML =
-        `<span class="nickname">${escapeHtml(nickname)}</span>` +
-        `<span class="comment">ส่ง ${escapeHtml(giftName)}${times}</span>`;
-
-      line.appendChild(createAvatar(nickname, avatarUrl));
-      line.appendChild(body);
+      bubble.innerHTML = `<span class="comment">ส่ง ${escapeHtml(giftName)}${times}</span>`;
 
       if (giftImage) {
         const icon = document.createElement("img");
@@ -336,22 +392,16 @@
         icon.alt = "";
         icon.referrerPolicy = "no-referrer";
         icon.onerror = () => icon.remove();
-        line.appendChild(icon);
+        bubble.appendChild(icon);
       }
 
       pushLine(line);
     }
 
     function addMemberLine(nickname, avatarUrl) {
-      const line = document.createElement("div");
-      line.className = "chat-line member-line";
-
-      const body = document.createElement("div");
-      body.className = "chat-body";
-      body.innerHTML = `<span class="nickname">${escapeHtml(nickname)}</span><span class="comment">เข้าห้องไลฟ์</span>`;
-
-      line.appendChild(createAvatar(nickname, avatarUrl));
-      line.appendChild(body);
+      const badge = createBadge("badge-member", "💗");
+      const { line, bubble } = buildLine("member-line", nickname, avatarUrl, badge);
+      bubble.innerHTML = `<span class="comment">เข้าห้องไลฟ์</span>`;
       pushLine(line);
     }
 

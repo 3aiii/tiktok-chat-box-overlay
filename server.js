@@ -63,6 +63,23 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Serve the bundled Kanit font files so the overlay renders Thai text
+  // consistently without depending on system fonts.
+  if (reqUrl.pathname.startsWith('/fonts/') && reqUrl.pathname.endsWith('.ttf')) {
+    const fontFile = path.basename(reqUrl.pathname);
+    const fontPath = path.join(__dirname, 'fonts', fontFile);
+    fs.readFile(fontPath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Font not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'font/ttf' });
+      res.end(data);
+    });
+    return;
+  }
+
   // Serve canvas-confetti from node_modules instead of a CDN so the overlay
   // works fully offline / without external requests.
   if (reqUrl.pathname === '/vendor/confetti.js') {

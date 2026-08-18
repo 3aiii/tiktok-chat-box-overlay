@@ -1,0 +1,92 @@
+#pin-wrap {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  width: fit-content;
+  max-width: calc(100vw - 48px);
+  transform: translateX(-50%) translateY(-12px) scale(0.96);
+  opacity: 0;
+  transition: opacity 0.25s cubic-bezier(0.2, 0.8, 0.3, 1),
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+#pin-wrap.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* Glassmorphism card: frosted blur + hairline border + soft ambient shadow,
+   matching the TikTok cyan/purple accent used across the chat widget. */
+#pin-wrap .chat-line {
+  position: relative;
+  align-items: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  padding: 16px 26px 18px;
+}
+#pin-wrap .line-header {
+  margin-right: 0;
+  margin-bottom: 8px;
+}
+#pin-wrap .avatar {
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(135deg, #00c4cc, #7c5cff);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+#pin-wrap .nickname {
+  background: none;
+  color: #5ce1e6;
+  box-shadow: none;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding: 0;
+}
+#pin-wrap .bubble {
+  max-height: 40vh;
+  overflow-y: auto;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.45;
+  padding: 0 4px 12px;
+  border-radius: 0;
+  background: none !important;
+  color: #fff;
+  box-shadow: none;
+}
+#pin-wrap .comment {
+  color: #fff !important;
+}
+
+/* Auto-unpin countdown: sits flush on the glass card's own bottom edge, like
+   part of its border, and drains from full width to empty over the same
+   duration panel.html used for its timer. */
+.pin-progress {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+.pin-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #00c4cc, #7c5cff);
+  box-shadow: 0 0 8px rgba(124, 92, 255, 0.6);
+  transform-origin: left;
+  animation-name: pin-progress-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+@keyframes pin-progress-drain {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}

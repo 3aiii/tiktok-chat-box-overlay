@@ -39,7 +39,7 @@
   #chat-box {
     position: fixed;
     bottom: 24px;
-    right: 24px;
+    left: 24px;
     width: 580px;
     max-height: 60vh;
     display: flex;
@@ -54,7 +54,7 @@
   .chat-line {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 0;
     animation: slide-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
     max-width: 100%;
@@ -63,7 +63,7 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    margin-right: 16px;
+    margin-left: 16px;
     margin-bottom: -12px;
     z-index: 1;
   }
@@ -125,7 +125,7 @@
     background: linear-gradient(150deg, #ffd9a8, #ffaf5e);
     color: #4a2600;
     padding: 17px 22px 12px;
-    border-radius: 26px 26px 8px 26px;
+    border-radius: 26px 26px 26px 8px;
     box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5);
     font-size: 19px;
     line-height: 1.4;
@@ -137,7 +137,7 @@
     background-size: 220% 220%;
     color: #3d2400;
     font-weight: 700;
-    font-size: 20px;
+    font-size: 15px;
     border: 2px solid rgba(255, 224, 130, 0.95);
     box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5), 0 0 22px -2px rgba(255, 190, 40, 0.65);
     animation: shimmer 3s ease-in-out infinite;
@@ -199,10 +199,52 @@
   #tts-toggle.off {
     opacity: 0.45;
   }
+  .pinnable {
+    cursor: pointer;
+  }
+  .pinnable .bubble {
+    transition: box-shadow 0.15s ease-out;
+  }
+  .pinnable:hover .bubble {
+    box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(124, 92, 255, 0.6);
+  }
+  .pinnable.pinned .bubble {
+    box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5), 0 0 0 3px #7c5cff;
+  }
+  #pinned-banner {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-12px);
+    opacity: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 720px;
+    background: rgba(20, 12, 40, 0.85);
+    border: 2px solid #7c5cff;
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 999px;
+    box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.6);
+    font-size: 18px;
+    transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+    z-index: 20;
+  }
+  #pinned-banner.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+  }
+  #pinned-banner .pin-icon { flex: 0 0 auto; font-size: 18px; }
+  #pinned-banner .pin-nickname { flex: 0 0 auto; font-weight: 800; color: #c9b8ff; }
+  #pinned-banner .pin-comment { flex: 1 1 auto; word-break: break-word; }
 </style>
 </head>
 <body>
   <button id="tts-toggle" title="เปิด/ปิดเสียงอ่านแชท"></button>
+  <div id="pinned-banner"></div>
   <div id="chat-box"></div>
 
   <script src="/vendor/confetti.js"></script>
@@ -299,7 +341,6 @@
         }
 
         if (data.type === "member") {
-          addMemberLine(data.nickname, data.avatarUrl);
           return;
         }
 
@@ -363,7 +404,7 @@
       const nick = document.createElement("span");
       nick.className = "nickname";
       nick.textContent = nickname;
-      header.appendChild(nick);
+      header.appendChild(nick); 
 
       const bubble = document.createElement("div");
       bubble.className = "bubble";
@@ -375,33 +416,66 @@
 
     function addChatLine(nickname, comment, avatarUrl) {
       const { line, bubble } = buildLine("", nickname, avatarUrl, null);
+      line.querySelector(".nickname").textContent += ":";
       bubble.innerHTML = `<span class="comment">${escapeHtml(comment)}</span>`;
+      line.classList.add("pinnable");
+      line.dataset.nickname = nickname;
+      line.dataset.comment = comment;
       pushLine(line);
     }
 
+    // Click a chat bubble to pin it to the banner at the top of the screen
+    // (e.g. to highlight a question worth answering on stream). Clicking the
+    // pinned bubble again, or a different one, updates/clears the banner.
+    // Only plain chat comments are pinnable — gift/member/follow lines aren't.
+    const pinnedBanner = document.getElementById("pinned-banner");
+    let pinnedLine = null;
+
+    function setPinnedBanner(nickname, comment) {
+      pinnedBanner.innerHTML =
+        '<span class="pin-icon">📌</span>' +
+        `<span class="pin-nickname">${escapeHtml(nickname)}</span>` +
+        `<span class="pin-comment">${escapeHtml(comment)}</span>`;
+      pinnedBanner.classList.add("show");
+    }
+
+    function clearPinnedBanner() {
+      pinnedBanner.classList.remove("show");
+    }
+
+    chatBox.addEventListener("click", (event) => {
+      const line = event.target.closest(".pinnable");
+      if (!line) return;
+
+      if (line === pinnedLine) {
+        line.classList.remove("pinned");
+        pinnedLine = null;
+        clearPinnedBanner();
+        return;
+      }
+
+      if (pinnedLine) pinnedLine.classList.remove("pinned");
+      line.classList.add("pinned");
+      pinnedLine = line;
+      setPinnedBanner(line.dataset.nickname, line.dataset.comment);
+    });
+
     function addGiftLine(nickname, giftName, repeatCount, avatarUrl, giftImage) {
-      const badge = createBadge("badge-gift", "🎁");
-      const { line, bubble } = buildLine("gift-line", nickname, avatarUrl, badge);
+      // const badge = createBadge("badge-gift", "🎁");
+      const { line, bubble } = buildLine("gift-line", nickname, avatarUrl, null);
       const times = repeatCount > 1 ? ` <span class="gift-count">x${repeatCount}</span>` : "";
       bubble.innerHTML = `<span class="comment">ส่ง ${escapeHtml(giftName)}${times}</span>`;
 
-      if (giftImage) {
-        const icon = document.createElement("img");
-        icon.className = "gift-icon";
-        icon.src = giftImage;
-        icon.alt = "";
-        icon.referrerPolicy = "no-referrer";
-        icon.onerror = () => icon.remove();
-        bubble.appendChild(icon);
-      }
+      // if (giftImage) {
+      //   const icon = document.createElement("img");
+      //   icon.className = "gift-icon";
+      //   icon.src = giftImage;
+      //   icon.alt = "";
+      //   icon.referrerPolicy = "no-referrer";
+      //   icon.onerror = () => icon.remove();
+      //   bubble.appendChild(icon);
+      // }
 
-      pushLine(line);
-    }
-
-    function addMemberLine(nickname, avatarUrl) {
-      const badge = createBadge("badge-member", "💗");
-      const { line, bubble } = buildLine("member-line", nickname, avatarUrl, badge);
-      bubble.innerHTML = `<span class="comment">เข้าห้องไลฟ์</span>`;
       pushLine(line);
     }
 

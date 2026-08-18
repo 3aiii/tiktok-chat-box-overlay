@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<title>Pin Control Panel</title>
+<link rel="stylesheet" href="/widgets/panel/panel.css" />
+</head>
+<body>
+  <header>
+    <h1>Pin Control Panel</h1>
+    <p>คลิกคอมเมนต์เพื่อปักหมุดขึ้นหน้า /pinned — คลิกซ้ำเพื่อเลิกปักหมุด</p>
+    <div class="controls">
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
+        </svg>
+        <input id="search" type="text" placeholder="ค้นหาคอมเมนต์หรือชื่อ…" />
+      </div>
+      <div class="segmented" id="auto-unpin" data-value="30000">
+        <span class="seg-label">auto-unpin</span>
+        <button type="button" data-value="0">ปิด</button>
+        <button type="button" data-value="15000">15s</button>
+        <button type="button" data-value="30000" class="active">30s</button>
+        <button type="button" data-value="60000">60s</button>
+      </div>
+    </div>
+  </header>
+  <div id="pinned-bar">
+    <span class="pin-dot"></span>
+    <span class="text"><b id="pinned-bar-nick"></b> <span id="pinned-bar-comment"></span></span>
+    <span id="pinned-bar-auto" class="auto-flag"></span>
+    <button class="clear-btn" id="pinned-bar-clear">เลิกปักหมุด</button>
+  </div>
+  <div id="list-wrap">
+    <div id="list"></div>
+    <div id="empty">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span id="empty-text">รอคอมเมนต์เข้ามา…</span>
+    </div>
+  </div>
+
+  <script src="/widgets/shared/shared.js"></script>
+  <script src="/widgets/panel/panel.js"></script>
+</body>
+</html>

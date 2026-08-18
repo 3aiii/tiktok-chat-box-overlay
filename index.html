@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<title>TikTok Live Overlay — Widgets</title>
+<style>
+  @font-face {
+    font-family: "Kanit";
+    src: url("/fonts/Kanit-Medium.ttf") format("truetype");
+    font-weight: 500;
+  }
+  @font-face {
+    font-family: "Kanit";
+    src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
+    font-weight: 600;
+  }
+  @font-face {
+    font-family: "Kanit";
+    src: url("/fonts/Kanit-Bold.ttf") format("truetype");
+    font-weight: 700;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    color: #f1ecff;
+    font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
+  }
+
+  body {
+    background:
+      radial-gradient(720px 420px at 12% -10%, rgba(124, 92, 255, 0.35), transparent 60%),
+      radial-gradient(640px 420px at 100% 0%, rgba(34, 193, 195, 0.22), transparent 55%),
+      radial-gradient(560px 360px at 80% 100%, rgba(255, 175, 94, 0.14), transparent 55%),
+      #0e0a17;
+  }
+
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 64px 24px 72px;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #b8a6ff;
+    margin: 0 0 14px;
+  }
+  .eyebrow .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c1c3;
+    box-shadow: 0 0 10px 2px rgba(34, 193, 195, 0.8);
+  }
+
+  h1 {
+    font-size: 30px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: #a89bd4;
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0 0 40px;
+    max-width: 52ch;
+    line-height: 1.6;
+  }
+
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #8f7fc9;
+    margin: 0 0 16px;
+  }
+  .section-label::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: linear-gradient(90deg, #34294f, transparent);
+  }
+  .section { margin-bottom: 40px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: linear-gradient(160deg, rgba(40, 30, 64, 0.75), rgba(24, 18, 40, 0.75));
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(124, 92, 255, 0.22);
+    border-radius: 18px;
+    padding: 20px;
+    cursor: pointer;
+    transition: transform 0.18s ease-out, border-color 0.18s ease-out, box-shadow 0.18s ease-out;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(124, 92, 255, 0.6);
+    box-shadow: 0 16px 34px -18px rgba(124, 92, 255, 0.55);
+  }
+
+  .card .top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .card .icon {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 21px;
+    background: linear-gradient(135deg, var(--accent-a, #7c5cff), var(--accent-b, #22c1c3));
+    box-shadow: 0 6px 16px -6px var(--accent-a, #7c5cff);
+  }
+  .card .path {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8f7fc9;
+    background: rgba(124, 92, 255, 0.12);
+    border: 1px solid rgba(124, 92, 255, 0.25);
+    padding: 4px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .card .title {
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .card .desc {
+    font-size: 13px;
+    font-weight: 500;
+    color: #a89bd4;
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+  .card .actions {
+    margin-top: auto;
+    padding-top: 4px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(124, 92, 255, 0.3);
+    background: rgba(124, 92, 255, 0.1);
+    color: #d9d0ff;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 8px 13px;
+    border-radius: 9px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(124, 92, 255, 0.22); }
+  .btn.copied { border-color: #22c1c3; color: #7be8e9; background: rgba(34, 193, 195, 0.12); }
+
+  .note {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 12.5px;
+    color: #8f7fc9;
+    background: rgba(124, 92, 255, 0.08);
+    border: 1px solid rgba(124, 92, 255, 0.18);
+    border-radius: 12px;
+    padding: 12px 16px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+  <main>
+    <span class="eyebrow"><span class="dot"></span> Live overlay control</span>
+    <h1>TikTok Live Overlay</h1>
+    <p class="subtitle">เลือกหน้าที่ต้องการ — ทุกหน้าต่อ WebSocket เดียวกัน (<code>:8081</code>) แค่โชว์คนละส่วนของสตรีม</p>
+
+    <div class="section">
+      <p class="section-label">Browser Source · OBS / Streamlabs</p>
+      <div class="grid">
+        <div class="card" data-href="/chat" style="--accent-a:#7c5cff; --accent-b:#22c1c3;">
+          <div class="top">
+            <div class="icon">💬</div>
+            <span class="path">/chat</span>
+          </div>
+          <div>
+            <div class="title">Chat</div>
+            <div class="desc">แชท + gift + เข้าห้องไลฟ์ + confetti + เสียงอ่าน</div>
+          </div>
+          <div class="actions">
+            <button class="btn" data-copy="/chat">คัดลอกลิงก์</button>
+          </div>
+        </div>
+        <div class="card" data-href="/pinned" style="--accent-a:#ff8a00; --accent-b:#ffd54a;">
+          <div class="top">
+            <div class="icon">📌</div>
+            <span class="path">/pinned</span>
+          </div>
+          <div>
+            <div class="title">Pinned</div>
+            <div class="desc">การ์ดคอมเมนต์ที่ถูกปักหมุด</div>
+          </div>
+          <div class="actions">
+            <button class="btn" data-copy="/pinned">คัดลอกลิงก์</button>
+          </div>
+        </div>
+        <div class="card" data-href="/top-donate" style="--accent-a:#ffd54a; --accent-b:#a259ff;">
+          <div class="top">
+            <div class="icon">🏆</div>
+            <span class="path">/top-donate</span>
+          </div>
+          <div>
+            <div class="title">Top Donate</div>
+            <div class="desc">10 อันดับโดเนทสูงสุด จาก EasyDonate (mock ถ้ายังไม่ตั้ง API key)</div>
+          </div>
+          <div class="actions">
+            <button class="btn" data-copy="/top-donate">คัดลอกลิงก์</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <p class="section-label">เปิดเองในแท็บ browser ปกติ</p>
+      <div class="grid">
+        <div class="card" data-href="/panel" style="--accent-a:#22c1c3; --accent-b:#7c5cff;">
+          <div class="top">
+            <div class="icon">🎛️</div>
+            <span class="path">/panel</span>
+          </div>
+          <div>
+            <div class="title">Panel</div>
+            <div class="desc">ดูคอมเมนต์สด คลิกเพื่อปักหมุดขึ้นหน้า Pinned</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">💡 Chat/Pinned ใช้ปุ่ม "คัดลอกลิงก์" วางใน Browser Source ของ OBS/Streamlabs ได้เลย — Panel เปิดเป็นแท็บ browser ปกติเท่านั้น ไม่ใช่ widget</p>
+  </main>
+
+  <script>
+    document.querySelectorAll(".card[data-href]").forEach((card) => {
+      card.addEventListener("click", () => {
+        window.open(card.dataset.href, "_blank");
+      });
+    });
+
+    document.querySelectorAll("[data-copy]").forEach((btn) => {
+      btn.addEventListener("click", async (event) => {
+        event.stopPropagation(); // don't also trigger the card's own click-to-open
+        const url = location.origin + btn.dataset.copy;
+        await navigator.clipboard.writeText(url);
+        const original = btn.textContent;
+        btn.textContent = "คัดลอกแล้ว ✓";
+        btn.classList.add("copied");
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove("copied");
+        }, 1500);
+      });
+    });
+  </script>
+</body>
+</html>

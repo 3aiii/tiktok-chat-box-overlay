@@ -11,6 +11,7 @@ const TIKTOK_USERNAME = process.env.TIKTOK_USERNAME || 'your_tiktok_username';
 const WS_PORT = process.env.WS_PORT || 8081;
 const HTTP_PORT = process.env.HTTP_PORT || 8080;
 const MOCK_MODE = process.env.MOCK === '1';
+const EASYDONATE_API_KEY = process.env.EASYDONATE_API_KEY || '';
 
 // Proxies Google Translate's TTS endpoint so overlay.html can fetch audio
 // same-origin (Chrome's ORB blocks the browser hitting translate.google.com
@@ -48,9 +49,100 @@ function proxyGoogleTts(text, res) {
     });
 }
 
+// EasyDonate host isn't documented anywhere public -- overridable via env in
+// case it turns out to differ once a real API key is available to test against.
+const EASYDONATE_API_BASE_URL = process.env.EASYDONATE_API_BASE_URL || 'https://api.easydonate.app';
+
+const MOCK_LEADERBOARD = [
+  { name: 'น้องโปรยปลา', amount: 5428.15 },
+  { name: 'sleeping', amount: 2040 },
+  { name: 'kai_gamer', amount: 1580.5 },
+  { name: 'pim.streamfan', amount: 990 },
+  { name: 'tanawat_th', amount: 720 },
+  { name: 'user_888', amount: 500 },
+  { name: 'nampeung_99', amount: 350 },
+  { name: 'boss_888', amount: 220 },
+  { name: 'malee_cat', amount: 150 },
+  { name: 'lek_fc', amount: 100 },
+];
+
+// EasyDonate's exact response shape isn't public without a real API key to test
+// against, so this normalizes a handful of plausible shapes (array directly,
+// or nested under data/items/leaderboard) and field name variants into
+// { name, amount }[] the widget can render regardless of which one shows up.
+function normalizeLeaderboard(payload) {
+  const list = Array.isArray(payload)
+    ? payload
+    : payload?.data?.items || payload?.data || payload?.leaderboard || payload?.items || [];
+  return list
+    .map((entry) => ({
+      name: entry.name || entry.nickname || entry.donorName || entry.donor?.name || 'ไม่ระบุชื่อ',
+      amount: Number(entry.amount ?? entry.total ?? entry.sum ?? entry.totalAmount ?? 0),
+    }))
+    .filter((entry) => entry.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+}
+
+// Hard-coded on top of whatever EasyDonate reports -- a real donor
+// (Huffy, 300 THB) who isn't tracked by the EasyDonate API but should still
+// show up on the leaderboard at the right rank.
+const EXTRA_LEADERBOARD_ENTRY = { name: 'Huffy', amount: 300 };
+
+function withExtraEntry(list) {
+  return [...list, EXTRA_LEADERBOARD_ENTRY].sort((a, b) => b.amount - a.amount);
+}
+
+function sendJson(res, statusCode, data) {
+  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+// Proxied (not called directly from the browser) so the EasyDonate API key
+// never ships to the client. Falls back to mock data when no key is
+// configured, so the /top-donate widget works out of the box.
+function handleLeaderboard(req, res) {
+  if (!EASYDONATE_API_KEY) {
+    sendJson(res, 200, { leaderboard: withExtraEntry(MOCK_LEADERBOARD), mock: true });
+    return;
+  }
+
+  https
+    .get(
+      `${EASYDONATE_API_BASE_URL}/api/v1/widgets/leaderboard`,
+      { headers: { Authorization: `Bearer ${EASYDONATE_API_KEY}` } },
+      (apiRes) => {
+        let body = '';
+        apiRes.on('data', (chunk) => (body += chunk));
+        apiRes.on('end', () => {
+          if (apiRes.statusCode !== 200) {
+            console.error('EasyDonate leaderboard error:', apiRes.statusCode, body);
+            sendJson(res, 502, { error: 'EasyDonate API error', status: apiRes.statusCode });
+            return;
+          }
+          try {
+            const leaderboard = withExtraEntry(normalizeLeaderboard(JSON.parse(body)));
+            sendJson(res, 200, { leaderboard, mock: false });
+          } catch (err) {
+            console.error('EasyDonate leaderboard parse error:', err.message);
+            sendJson(res, 502, { error: 'Failed to parse EasyDonate response' });
+          }
+        });
+      }
+    )
+    .on('error', (err) => {
+      console.error('EasyDonate leaderboard request error:', err.message);
+      sendJson(res, 502, { error: 'EasyDonate request failed' });
+    });
+}
+
 // Serve overlay.html so it can be added as a Browser Source in OBS/Streamlabs
 const httpServer = http.createServer((req, res) => {
   const reqUrl = new URL(req.url, `http://localhost:${HTTP_PORT}`);
+
+  if (reqUrl.pathname === '/api/leaderboard') {
+    handleLeaderboard(req, res);
+    return;
+  }
 
   if (reqUrl.pathname === '/tts') {
     const text = reqUrl.searchParams.get('text') || '';
@@ -96,11 +188,60 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  const filePath = path.join(__dirname, 'overlay.html');
-  fs.readFile(filePath, (err, data) => {
+  // Generic static serve for the split widget files. Each widget lives in its
+  // own folder (widgets/chat/chat.html, chat.css, chat.js, ...) alongside a
+  // shared/ folder for code common to all of them, so this resolves the full
+  // path under widgets/ rather than just the basename.
+  const WIDGET_CONTENT_TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css' };
+  if (reqUrl.pathname.startsWith('/widgets/')) {
+    const ext = path.extname(reqUrl.pathname);
+    const contentType = WIDGET_CONTENT_TYPES[ext];
+    if (!contentType) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    // path.join collapses ".." segments, and this check rejects anything
+    // that still climbs outside widgets/ afterwards -- prevents requests
+    // like /widgets/../server.js from escaping the widgets folder.
+    const widgetsRoot = path.join(__dirname, 'widgets');
+    const widgetPath = path.join(widgetsRoot, decodeURIComponent(reqUrl.pathname.slice('/widgets/'.length)));
+    if (!widgetPath.startsWith(widgetsRoot + path.sep)) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
+    fs.readFile(widgetPath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Widget file not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': contentType });
+      res.end(data);
+    });
+    return;
+  }
+
+  // Each split overlay widget lives at its own path so it can be added as a
+  // separate Browser Source in OBS/Streamlabs and scaled/positioned independently.
+  const PAGE_ROUTES = {
+    '/': 'index.html',
+    '/chat': 'widgets/chat/chat.html',
+    '/pinned': 'widgets/pinned/pinned.html',
+    '/panel': 'widgets/panel/panel.html',
+    '/top-donate': 'widgets/top-donate/top-donate.html',
+  };
+  const page = PAGE_ROUTES[reqUrl.pathname];
+  if (!page) {
+    res.writeHead(404);
+    res.end('Not found');
+    return;
+  }
+  fs.readFile(path.join(__dirname, page), (err, data) => {
     if (err) {
       res.writeHead(500);
-      res.end('Failed to load overlay.html');
+      res.end('Failed to load page');
       return;
     }
     res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -124,6 +265,23 @@ function broadcast(payload) {
   });
 }
 
+// The panel widget is the only client that sends messages upstream (pin/unpin
+// a comment). Relay as-is to every connected widget; pinned.html is the one
+// that acts on it, everyone else ignores unknown types.
+wss.on('connection', (ws) => {
+  ws.on('message', (raw) => {
+    let message;
+    try {
+      message = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (message.type === 'pin' || message.type === 'unpin') {
+      broadcast(message);
+    }
+  });
+});
+
 if (MOCK_MODE) {
   console.log('MOCK mode: generating fake chat messages instead of connecting to TikTok.');
 
@@ -138,6 +296,8 @@ if (MOCK_MODE) {
     'อยู่มาดูตลอดเลยค่ะ',
   ];
 
+  const mockAvatar = (nickname) => `https://i.pravatar.cc/150?u=${encodeURIComponent(nickname)}`;
+
   const mockGifts = [
     { name: 'Rose', image: 'https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/968820bc85e274713c795a6aef3f7c67~tplv-obj.png' },
     { name: 'Ice Cream Cone', image: 'https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/968820bc85e274713c795a6aef3f7c67~tplv-obj.png' },
@@ -145,10 +305,12 @@ if (MOCK_MODE) {
   ];
 
   setInterval(() => {
+    const nickname = mockUsers[Math.floor(Math.random() * mockUsers.length)];
     const message = {
       type: 'chat',
-      user: mockUsers[Math.floor(Math.random() * mockUsers.length)],
-      nickname: mockUsers[Math.floor(Math.random() * mockUsers.length)],
+      user: nickname,
+      nickname,
+      avatarUrl: mockAvatar(nickname),
       comment: mockComments[Math.floor(Math.random() * mockComments.length)],
     };
     console.log(`[MOCK] ${message.nickname}: ${message.comment}`);
@@ -157,11 +319,12 @@ if (MOCK_MODE) {
 
   setInterval(() => {
     const gift = mockGifts[Math.floor(Math.random() * mockGifts.length)];
+    const nickname = mockUsers[Math.floor(Math.random() * mockUsers.length)];
     const message = {
       type: 'gift',
-      user: mockUsers[Math.floor(Math.random() * mockUsers.length)],
-      nickname: mockUsers[Math.floor(Math.random() * mockUsers.length)],
-      avatarUrl: '',
+      user: nickname,
+      nickname,
+      avatarUrl: mockAvatar(nickname),
       giftName: gift.name,
       giftImage: gift.image,
       repeatCount: Math.floor(Math.random() * 5) + 1,
@@ -171,11 +334,12 @@ if (MOCK_MODE) {
   }, 8000);
 
   setInterval(() => {
+    const nickname = mockUsers[Math.floor(Math.random() * mockUsers.length)];
     const message = {
       type: 'member',
-      user: mockUsers[Math.floor(Math.random() * mockUsers.length)],
-      nickname: mockUsers[Math.floor(Math.random() * mockUsers.length)],
-      avatarUrl: '',
+      user: nickname,
+      nickname,
+      avatarUrl: mockAvatar(nickname),
     };
     console.log(`[MOCK] ${message.nickname} joined`);
     broadcast(message);

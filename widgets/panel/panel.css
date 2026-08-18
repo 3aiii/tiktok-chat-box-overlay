@@ -1,0 +1,248 @@
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Medium.ttf") format("truetype");
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  color: #f1ecff;
+  font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(720px 420px at 12% -10%, rgba(124, 92, 255, 0.30), transparent 60%),
+    radial-gradient(640px 420px at 100% 0%, rgba(34, 193, 195, 0.18), transparent 55%),
+    #0e0a17;
+}
+
+header {
+  flex: 0 0 auto;
+  padding: 20px 24px 16px;
+}
+header h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+header p {
+  margin: 4px 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #a89bd4;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 720px;
+}
+.search-box {
+  flex: 1 1 220px;
+  position: relative;
+}
+.search-box svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8f7fc9;
+  pointer-events: none;
+}
+#search {
+  width: 100%;
+  background: rgba(124, 92, 255, 0.08);
+  border: 1px solid rgba(124, 92, 255, 0.25);
+  color: #f1ecff;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 10px 14px 10px 36px;
+  border-radius: 10px;
+}
+#search::placeholder { color: #7a6ba8; }
+#search:focus { outline: none; border-color: #7c5cff; background: rgba(124, 92, 255, 0.14); }
+
+.segmented {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(124, 92, 255, 0.08);
+  border: 1px solid rgba(124, 92, 255, 0.25);
+  border-radius: 10px;
+  padding: 3px;
+}
+.segmented .seg-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8f7fc9;
+  padding: 0 8px 0 6px;
+  white-space: nowrap;
+}
+.segmented button {
+  border: none;
+  background: transparent;
+  color: #a89bd4;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.segmented button:hover { color: #f1ecff; }
+.segmented button.active {
+  background: linear-gradient(135deg, #7c5cff, #5b3df0);
+  color: #fff;
+}
+
+/* Always shows what's currently pinned (or nothing), so the streamer
+   doesn't have to scroll the list to check/clear it. */
+#pinned-bar {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  max-width: 720px;
+  margin: 0 24px 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.18), rgba(34, 193, 195, 0.1));
+  border: 1px solid rgba(124, 92, 255, 0.4);
+  border-radius: 12px;
+}
+#pinned-bar.show { display: flex; }
+#pinned-bar .pin-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff8a00;
+  box-shadow: 0 0 10px 2px rgba(255, 138, 0, 0.8);
+}
+#pinned-bar .text {
+  flex: 1 1 auto;
+  font-size: 13.5px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#pinned-bar .text b { color: #c9b8ff; font-weight: 700; }
+#pinned-bar .auto-flag {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b8a6ff;
+  background: rgba(124, 92, 255, 0.2);
+  border: 1px solid rgba(124, 92, 255, 0.45);
+  padding: 4px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+#pinned-bar button.clear-btn {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1ecff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#pinned-bar button.clear-btn:hover { background: rgba(255, 255, 255, 0.12); }
+
+#list-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 24px 24px;
+  overflow-y: auto;
+  border: 1px solid rgba(124, 92, 255, 0.2);
+  border-radius: 16px;
+  background: rgba(24, 18, 40, 0.55);
+  backdrop-filter: blur(10px);
+}
+#list {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 6px;
+}
+#empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  text-align: center;
+  color: #6f6490;
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 20px;
+}
+#empty svg { opacity: 0.5; }
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s ease-out, border-color 0.12s ease-out;
+}
+.row:hover { background: rgba(124, 92, 255, 0.1); }
+.row.pinned {
+  border-color: rgba(255, 138, 0, 0.55);
+  background: rgba(255, 138, 0, 0.1);
+}
+.row .avatar {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7c5cff, #22c1c3);
+  overflow: hidden;
+}
+.row .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.row .text { flex: 1 1 auto; min-width: 0; }
+.row .nickname { font-weight: 700; color: #c9b8ff; font-size: 12.5px; }
+.row .comment { word-break: break-word; font-size: 13.5px; font-weight: 500; margin-top: 2px; color: #e5ddff; }
+.row .pin-flag {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ff8a00;
+  background: rgba(255, 138, 0, 0.15);
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+#list-wrap::-webkit-scrollbar { width: 8px; }
+#list-wrap::-webkit-scrollbar-thumb { background: rgba(124, 92, 255, 0.35); border-radius: 8px; }

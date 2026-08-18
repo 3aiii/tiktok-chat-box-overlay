@@ -1,0 +1,132 @@
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Medium.ttf") format("truetype");
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-ExtraBold.ttf") format("truetype");
+  font-weight: 800;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
+  overflow: hidden;
+}
+
+/* Flat, plain version: one solid-color card, no glow gradients, no
+   text-shadow/gradient-clip flourishes -- same layout and rank accent
+   colors as before, just quieter. */
+#card {
+  position: relative;
+  width: 300px;
+  margin: 24px;
+  border-radius: 14px;
+  padding: 14px 18px;
+  background: rgba(22, 18, 32, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px -16px rgba(0, 0, 0, 0.6);
+}
+
+/* Floats out of #card's normal flow, straddling its top edge and centered
+   independent of the card's own content -- a badge sitting on the card
+   rather than a header pushing the list down. */
+#title-row {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 16px;
+  border-radius: 999px;
+  background: #7c5cff;
+}
+#title {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+#list {
+  position: relative;
+  height: 24px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+#track {
+  display: flex;
+  height: 100%;
+  /* Gap between the outgoing/incoming row while advance() slides between
+     them -- ROW_GAP_PX in top-donate.js has to match this so the slide
+     distance clears the gap too, landing flush on the next row instead of
+     resting half-in-the-gap. */
+  gap: 12px;
+  transition: transform 0.9s cubic-bezier(0.22, 0.8, 0.28, 1);
+}
+
+.row {
+  flex: 0 0 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px;
+  font-size: 14px;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: #e6e1f2;
+}
+.rank {
+  color: #8f86ab;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.row.rank-1 .rank { color: #ffd166; }
+.row.rank-2 .rank { color: #d8d4e6; }
+.row.rank-3 .rank { color: #e3a15c; }
+
+.amount {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: #b8a6ff;
+}
+.row.rank-1 .amount { color: #ffd166; }
+.row.rank-2 .amount { color: #d8d4e6; }
+.row.rank-3 .amount { color: #e3a15c; }
+
+#empty {
+  text-align: center;
+  color: #6f6490;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 0 4px;
+}

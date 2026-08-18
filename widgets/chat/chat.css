@@ -1,0 +1,136 @@
+/* TikTok Live chat — dark inline style (overrides shared.css) */
+
+#chat-wrapper {
+  position: fixed;
+  left: 24px;
+  bottom: 20px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+#chat-box {
+  position: static;
+  width: 560px;
+  gap: 5px;
+  border-radius: 18px;
+  /* padding: 14px; */
+  /* background: linear-gradient(160deg, rgba(0, 196, 204, 0.18), rgba(124, 92, 255, 0.18)); */
+}
+
+#chat-box.overflowing {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 40px);
+  mask-image: linear-gradient(to bottom, transparent, black 40px);
+}
+
+.chat-line {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-start;
+  background: rgba(0, 0, 0, 0.50);
+  border-radius: 999px;
+  padding: 4px 12px;
+  gap: 8px;
+  max-width: 100%;
+  width: fit-content;
+}
+
+.line-header {
+  flex-shrink: 0;
+  margin-bottom: 0;
+  margin-right: 0;
+  z-index: auto;
+  gap: 6px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #00c4cc, #7c5cff);
+  font-size: 11px;
+}
+
+.nickname {
+  background: none;
+  color: #5ce1e6;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.bubble {
+  background: none !important;
+  color: #fff;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none !important;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 400;
+  border: none !important;
+  animation: none !important;
+}
+
+.comment {
+  color: #fff !important;
+}
+
+.badge {
+  width: 22px;
+  height: 22px;
+  /* border-radius: 6px; */
+  font-size: 11px;
+}
+
+/* ---- Gift line ---- */
+
+.gift-line {
+  background: rgba(100, 40, 180, 0.55) !important;
+}
+
+.gift-line .nickname {
+  color: #ffd54a;
+  box-shadow: none;
+  background: none;
+}
+
+.gift-line .comment {
+  color: #ffd54a !important;
+}
+
+.gift-line .bubble {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.gift-count {
+  color: #fff !important;
+  font-weight: 800;
+}
+
+.gift-icon {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+/* ---- Member join line ---- */
+.member-line {
+  background: rgba(236, 72, 153, 0.30) !important;
+}
+
+.member-line .nickname {
+  color: #f9a8d4;
+}
+
+.member-line .comment {
+  color: #f9a8d4 !important;
+}
+
+/* ---- TTS toggle — stacked right above the chat box, inside #chat-wrapper ---- */
+#tts-toggle {
+  position: static;
+}

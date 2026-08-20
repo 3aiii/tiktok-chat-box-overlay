@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<title>Session Summary</title>
+<link rel="stylesheet" href="/widgets/summary/summary.css" />
+</head>
+<body>
+  <div id="card">
+    <div id="title-row"><span id="title">สรุปไลฟ์นี้</span></div>
+    <div id="stats">
+      <div class="stat">
+        <span class="stat-label">คอมเมนต์</span>
+        <span class="stat-value" id="stat-comments">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">ของขวัญ</span>
+        <span class="stat-value" id="stat-gifts">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">ผู้ชมที่ทัก/เข้าร่วม</span>
+        <span class="stat-value" id="stat-viewers">0</span>
+      </div>
+      <div class="stat" id="top-gifter-row">
+        <span class="stat-label">Top gifter</span>
+        <span class="stat-value" id="stat-top-gifter">—</span>
+      </div>
+    </div>
+    <div id="empty">รอกด "แสดงสรุป" จากแผงควบคุม…</div>
+  </div>
+
+  <script src="/widgets/shared/shared.js"></script>
+  <script src="/widgets/summary/summary.js"></script>
+</body>
+</html>

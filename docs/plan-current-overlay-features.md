@@ -32,3 +32,31 @@ chat comments aloud in Thai, without paid APIs.
 
 - Viewer count / like count / question events — likely to be added incrementally, same pattern as
   Gift and Member join (pick one, confirm real event field names via debug logging, wire up server + overlay)
+
+## Session stats summary (implemented)
+
+7. **Trigger**: manual only — a button in the panel widget sends `show-summary` over WS; the server
+   snapshots its in-memory counters and broadcasts a `summary` message. No auto-display on `DISCONNECTED`
+   (rejected for now — can revisit if the streamer wants it).
+8. **Storage**: plain counters on the server (`stats` object in `server.js`), incremented from inside
+   `broadcast()` so both mock and real event paths update them for free. Resets on server restart, same
+   as everything else — no file/db persistence (see non-goals).
+9. **Gift value**: shown in diamonds (`gift.diamondCount * repeatCount`), not baht — diamonds is what the
+   TikTok event actually reports; converting to baht would need a rate that isn't available server-side.
+
+## BRB Timer (implemented)
+
+10. **Sync model**: server holds `endsAt` (an epoch timestamp), not a ticking counter — clients compute
+    their own remaining time from `endsAt - Date.now()` on a local interval. WS traffic is limited to
+    control events (start/pause/resume/reset/message), not a per-second tick broadcast.
+11. **Sync-on-connect**: every new WS connection immediately receives the current `timerState` — this is
+    what makes reloading `/timer` (or opening `/panel` late) resume mid-countdown instead of resetting to
+    zero. Verified: a client joining ~2s after a 10s countdown started receives `endsAt` reflecting ~8s
+    remaining, not the original 10s.
+12. **Expiry**: a single server-side `setInterval` (250ms) flips `running` → `ended`, so all clients agree
+    on the moment it ended instead of each browser source deciding independently.
+13. **Trigger surface**: folded into the existing `/panel` (not a separate control page) — same reasoning
+    as `show-summary`: one tab for the streamer to watch during a live. Duration presets (1/5/10/15 min)
+    start immediately on click; a custom minute/second input pairs with a separate Start button.
+14. **Storage**: `timerState` in `server.js`, in-memory, resets on server restart — same non-goal as
+    everything else in this project.

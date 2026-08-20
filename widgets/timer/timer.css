@@ -1,0 +1,68 @@
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-ExtraBold.ttf") format("truetype");
+  font-weight: 800;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
+  overflow: hidden;
+}
+
+#card {
+  /* Fixed instead of fit-content -- otherwise the box visibly resizes as the
+     clock text and message length change (e.g. "05:00" vs "00:00", or a
+     longer/shorter BRB message set from the panel). */
+  width: 320px;
+  margin: 24px;
+  padding: 24px 40px;
+  border-radius: 20px;
+  text-align: center;
+  background: rgba(22, 18, 32, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px -16px rgba(0, 0, 0, 0.6);
+}
+
+#clock {
+  font-weight: 800;
+  font-size: 64px;
+  color: #e6e1f2;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+#message {
+  margin-top: 6px;
+  font-weight: 600;
+  font-size: 16px;
+  word-break: break-word;
+  color: #a89bd4;
+}
+
+#card.paused #clock { color: #8f86ab; }
+#card.paused #message { color: #8f86ab; }
+
+#card.ended #clock { color: #ffd166; }
+#card.ended {
+  animation: timer-ended-pulse 1s ease-in-out infinite;
+}
+@keyframes timer-ended-pulse {
+  0%, 100% { box-shadow: 0 10px 28px -16px rgba(0, 0, 0, 0.6); }
+  50% { box-shadow: 0 10px 28px -10px rgba(255, 209, 102, 0.55); }
+}

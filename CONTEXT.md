@@ -36,6 +36,20 @@ _Avoid_: Banned word, filter word
 The on/off control a streamer uses to mute/unmute all spoken output; persists across page refresh.
 _Avoid_: Mute button
 
+**Session stats summary**:
+An on-demand snapshot of total Comments, total Gifts (count + diamonds), unique interacting viewers, and
+the top gifter by diamonds, accumulated in-memory since the server started. Shown only when the streamer
+clicks "แสดงสรุป" in the panel; there is no auto-display and no persistence across a server restart.
+_Avoid_: Stream stats, analytics
+
+**BRB Timer**:
+A break countdown shown on its own overlay (`/timer`) and controlled from the panel: preset or custom
+duration, start/pause/resume/reset, and a custom message. Server holds the single source of truth
+(`timerState`, keyed on `endsAt` rather than a ticking counter) so every connected client — including one
+that reloads or joins mid-countdown — computes the same remaining time and stays in sync. Resets to idle
+on server restart, no persistence.
+_Avoid_: Break screen, intermission timer
+
 ## Relationships
 
 - A **Gift streak** resolves into exactly one Gift announcement

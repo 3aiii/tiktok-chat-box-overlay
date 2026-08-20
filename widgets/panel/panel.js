@@ -150,9 +150,84 @@ function unpin() {
 
 pinnedBar.querySelector("#pinned-bar-clear").addEventListener("click", unpin);
 
+document.getElementById("show-summary").addEventListener("click", () => {
+  ws.send({ type: "show-summary" });
+});
+
+// ---- BRB Timer controls ----
+const timerReadout = document.getElementById("timer-readout");
+const timerPresets = document.getElementById("timer-presets");
+const timerMinInput = document.getElementById("timer-min");
+const timerSecInput = document.getElementById("timer-sec");
+const timerMessageInput = document.getElementById("timer-message");
+let timerTickInterval = null;
+
+function formatMs(ms) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function customDurationMs() {
+  const min = Number(timerMinInput.value) || 0;
+  const sec = Number(timerSecInput.value) || 0;
+  return (min * 60 + sec) * 1000;
+}
+
+timerPresets.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const ms = Number(btn.dataset.ms);
+    timerMinInput.value = Math.floor(ms / 60000);
+    timerSecInput.value = (ms % 60000) / 1000;
+    ws.send({ type: "timer-start", durationMs: ms });
+  });
+});
+
+document.getElementById("timer-start").addEventListener("click", () => {
+  ws.send({ type: "timer-start", durationMs: customDurationMs() });
+});
+document.getElementById("timer-pause").addEventListener("click", () => {
+  ws.send({ type: "timer-pause" });
+});
+document.getElementById("timer-resume").addEventListener("click", () => {
+  ws.send({ type: "timer-resume" });
+});
+document.getElementById("timer-reset").addEventListener("click", () => {
+  ws.send({ type: "timer-reset" });
+});
+timerMessageInput.addEventListener("change", () => {
+  ws.send({ type: "timer-set-message", message: timerMessageInput.value });
+});
+
+function renderTimerState(state) {
+  clearInterval(timerTickInterval);
+  timerTickInterval = null;
+
+  if (document.activeElement !== timerMessageInput) {
+    timerMessageInput.value = state.message;
+  }
+
+  if (state.status === "running") {
+    const render = () => (timerReadout.textContent = formatMs(state.endsAt - Date.now()));
+    render();
+    timerTickInterval = setInterval(render, 250);
+  } else if (state.status === "paused") {
+    timerReadout.textContent = formatMs(state.remainingMs);
+  } else if (state.status === "ended") {
+    timerReadout.textContent = "00:00";
+  } else {
+    timerReadout.textContent = formatMs(state.durationMs);
+  }
+}
+
 const setWsStatus = attachStatusIndicator();
 
 ws = connectWS((data) => {
+  if (data.type === "timer-state") {
+    renderTimerState(data);
+    return;
+  }
   if (data.type !== "chat") return;
   addRow(data.nickname, data.comment, data.avatarUrl);
 }, setWsStatus);

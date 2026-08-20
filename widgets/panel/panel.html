@@ -23,8 +23,37 @@
         <button type="button" data-value="30000" class="active">30s</button>
         <button type="button" data-value="60000">60s</button>
       </div>
+      <button type="button" class="summary-btn" id="show-summary">📊 แสดงสรุป</button>
     </div>
   </header>
+  <section id="timer-panel">
+    <div class="timer-panel-head">
+      <h2>BRB Timer</h2>
+      <div class="timer-readout" id="timer-readout">05:00</div>
+    </div>
+    <div class="timer-controls">
+      <div class="segmented" id="timer-presets">
+        <span class="seg-label">เริ่มด่วน</span>
+        <button type="button" data-ms="60000">1m</button>
+        <button type="button" data-ms="300000">5m</button>
+        <button type="button" data-ms="600000">10m</button>
+        <button type="button" data-ms="900000">15m</button>
+      </div>
+      <div class="timer-custom">
+        <input id="timer-min" type="number" min="0" max="99" value="5" />
+        <span>นาที</span>
+        <input id="timer-sec" type="number" min="0" max="59" value="0" />
+        <span>วินาที</span>
+        <button type="button" class="timer-btn primary" id="timer-start">▶ เริ่ม</button>
+      </div>
+      <div class="timer-message-row">
+        <input id="timer-message" type="text" placeholder="ข้อความ BRB…" value="พักเบรกสักครู่ เดี๋ยวกลับมา" />
+        <button type="button" class="timer-btn" id="timer-pause">⏸ พัก</button>
+        <button type="button" class="timer-btn" id="timer-resume">▶ เล่นต่อ</button>
+        <button type="button" class="timer-btn" id="timer-reset">↺ รีเซ็ต</button>
+      </div>
+    </div>
+  </section>
   <div id="pinned-bar">
     <span class="pin-dot"></span>
     <span class="text"><b id="pinned-bar-nick"></b> <span id="pinned-bar-comment"></span></span>

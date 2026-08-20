@@ -97,6 +97,49 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
+// In-memory only, by design (see CONTEXT.md non-goals) -- resets on server
+// restart, no file/db persistence. gifters is keyed by uniqueId so a repeat
+// donor's diamonds accumulate onto the same entry instead of splitting.
+const stats = {
+  comments: 0,
+  gifts: 0,
+  giftDiamonds: 0,
+  viewers: new Set(),
+  gifters: new Map(),
+};
+
+// Called from broadcast() so every chat/gift/member path -- mock and real
+// alike -- updates the same counters without each call site remembering to.
+function trackStats(message) {
+  if (message.type === 'chat') {
+    stats.comments++;
+    if (message.user) stats.viewers.add(message.user);
+  } else if (message.type === 'gift') {
+    stats.gifts += message.repeatCount || 1;
+    stats.giftDiamonds += message.diamondCount || 0;
+    if (message.user) {
+      const gifter = stats.gifters.get(message.user) || { nickname: message.nickname, diamonds: 0 };
+      gifter.nickname = message.nickname;
+      gifter.diamonds += message.diamondCount || 0;
+      stats.gifters.set(message.user, gifter);
+    }
+  } else if (message.type === 'member') {
+    if (message.user) stats.viewers.add(message.user);
+  }
+}
+
+function buildSummaryPayload() {
+  const topGifter = [...stats.gifters.values()].sort((a, b) => b.diamonds - a.diamonds)[0] || null;
+  return {
+    type: 'summary',
+    comments: stats.comments,
+    gifts: stats.gifts,
+    giftDiamonds: stats.giftDiamonds,
+    viewers: stats.viewers.size,
+    topGifter,
+  };
+}
+
 // Proxied (not called directly from the browser) so the EasyDonate API key
 // never ships to the client. Falls back to mock data when no key is
 // configured, so the /top-donate widget works out of the box.
@@ -231,6 +274,8 @@ const httpServer = http.createServer((req, res) => {
     '/pinned': 'widgets/pinned/pinned.html',
     '/panel': 'widgets/panel/panel.html',
     '/top-donate': 'widgets/top-donate/top-donate.html',
+    '/summary': 'widgets/summary/summary.html',
+    '/timer': 'widgets/timer/timer.html',
   };
   const page = PAGE_ROUTES[reqUrl.pathname];
   if (!page) {
@@ -257,6 +302,7 @@ const wss = new WebSocketServer({ port: WS_PORT });
 console.log(`WebSocket server listening on ws://localhost:${WS_PORT}`);
 
 function broadcast(payload) {
+  trackStats(payload);
   const message = JSON.stringify(payload);
   wss.clients.forEach((client) => {
     if (client.readyState === client.OPEN) {
@@ -265,10 +311,41 @@ function broadcast(payload) {
   });
 }
 
-// The panel widget is the only client that sends messages upstream (pin/unpin
-// a comment). Relay as-is to every connected widget; pinned.html is the one
-// that acts on it, everyone else ignores unknown types.
+// In-memory only, same as `stats` -- resets on server restart. `endsAt` (not
+// a countdown value) is the source of truth while running so every client
+// computes its own remaining time from `endsAt - Date.now()` instead of the
+// server pushing a tick every second.
+const timerState = {
+  status: 'idle', // idle | running | paused | ended
+  durationMs: 5 * 60000,
+  endsAt: null,
+  remainingMs: null,
+  message: 'พักเบรกสักครู่ เดี๋ยวกลับมา',
+};
+
+function timerStatePayload() {
+  return { type: 'timer-state', ...timerState };
+}
+
+// Single authoritative running -> ended transition, checked here instead of
+// leaving every open /timer browser source to independently decide it hit
+// zero (they'd all fire around the same time but not necessarily agree).
+setInterval(() => {
+  if (timerState.status === 'running' && Date.now() >= timerState.endsAt) {
+    timerState.status = 'ended';
+    timerState.endsAt = null;
+    broadcast(timerStatePayload());
+  }
+}, 250);
+
+// The panel widget sends messages upstream: pin/unpin a comment, request the
+// current session stats snapshot to show on /summary, or control the BRB timer.
 wss.on('connection', (ws) => {
+  // Sync-on-connect: without this, reloading /timer mid-countdown (or opening
+  // /panel late) would show idle/zero until the next control action instead
+  // of picking up wherever the countdown actually is.
+  ws.send(JSON.stringify(timerStatePayload()));
+
   ws.on('message', (raw) => {
     let message;
     try {
@@ -278,6 +355,34 @@ wss.on('connection', (ws) => {
     }
     if (message.type === 'pin' || message.type === 'unpin') {
       broadcast(message);
+    } else if (message.type === 'show-summary') {
+      broadcast(buildSummaryPayload());
+    } else if (message.type === 'timer-start') {
+      timerState.durationMs = message.durationMs;
+      timerState.endsAt = Date.now() + message.durationMs;
+      timerState.remainingMs = null;
+      timerState.status = 'running';
+      broadcast(timerStatePayload());
+    } else if (message.type === 'timer-pause') {
+      if (timerState.status !== 'running') return;
+      timerState.remainingMs = timerState.endsAt - Date.now();
+      timerState.endsAt = null;
+      timerState.status = 'paused';
+      broadcast(timerStatePayload());
+    } else if (message.type === 'timer-resume') {
+      if (timerState.status !== 'paused') return;
+      timerState.endsAt = Date.now() + timerState.remainingMs;
+      timerState.remainingMs = null;
+      timerState.status = 'running';
+      broadcast(timerStatePayload());
+    } else if (message.type === 'timer-reset') {
+      timerState.status = 'idle';
+      timerState.endsAt = null;
+      timerState.remainingMs = null;
+      broadcast(timerStatePayload());
+    } else if (message.type === 'timer-set-message') {
+      timerState.message = message.message;
+      broadcast(timerStatePayload());
     }
   });
 });
@@ -387,6 +492,7 @@ if (MOCK_MODE) {
       giftName: data.gift?.name || 'ของขวัญ',
       giftImage: data.gift?.image?.urlList?.[0] || '',
       repeatCount: data.repeatCount || 1,
+      diamondCount: (data.gift?.diamondCount || 0) * (data.repeatCount || 1),
     };
     console.log(`${message.nickname} sent ${message.giftName} x${message.repeatCount}`);
     broadcast(message);

@@ -102,6 +102,49 @@
     gap: 14px;
   }
 
+  /* Fixed 3-visible-cards-at-a-time carousel, used for the "Browser Source"
+     grid so it stays exactly 3 columns wide regardless of card count, and
+     extra cards scroll into view instead of wrapping to a new row. */
+  .carousel { position: relative; }
+  .carousel-track {
+    --visible: 3;
+    --gap: 14px;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: calc((100% - (var(--visible) - 1) * var(--gap)) / var(--visible));
+    gap: var(--gap);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+  }
+  .carousel-track::-webkit-scrollbar { display: none; }
+  .carousel-track > .card { scroll-snap-align: start; min-width: 0; }
+  @media (max-width: 720px) { .carousel-track { --visible: 1; } }
+  @media (min-width: 721px) and (max-width: 900px) { .carousel-track { --visible: 2; } }
+
+  .carousel-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(124, 92, 255, 0.35);
+    background: rgba(24, 18, 40, 0.9);
+    backdrop-filter: blur(6px);
+    color: #d9d0ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+  }
+  .carousel-nav:hover { background: rgba(124, 92, 255, 0.3); }
+  .carousel-nav.prev { left: -17px; }
+  .carousel-nav.next { right: -17px; }
+  .carousel-nav:disabled { opacity: 0.25; cursor: default; pointer-events: none; }
+
   .card {
     position: relative;
     display: flex;
@@ -204,7 +247,14 @@
 
     <div class="section">
       <p class="section-label">Browser Source · OBS / Streamlabs</p>
-      <div class="grid">
+      <div class="carousel">
+        <button type="button" class="carousel-nav prev" aria-label="ก่อนหน้า">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <button type="button" class="carousel-nav next" aria-label="ถัดไป">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <div class="carousel-track">
         <div class="card" data-href="/chat" style="--accent-a:#7c5cff; --accent-b:#22c1c3;">
           <div class="top">
             <div class="icon">💬</div>
@@ -243,6 +293,20 @@
           <div class="actions">
             <button class="btn" data-copy="/top-donate">คัดลอกลิงก์</button>
           </div>
+        </div>
+        <div class="card" data-href="/timer" style="--accent-a:#ffd166; --accent-b:#ff8a5c;">
+          <div class="top">
+            <div class="icon">⏱️</div>
+            <span class="path">/timer</span>
+          </div>
+          <div>
+            <div class="title">BRB Timer</div>
+            <div class="desc">นับถอยหลังพักเบรก คุมจาก Panel</div>
+          </div>
+          <div class="actions">
+            <button class="btn" data-copy="/timer">คัดลอกลิงก์</button>
+          </div>
+        </div>
         </div>
       </div>
     </div>
@@ -286,6 +350,33 @@
           btn.classList.remove("copied");
         }, 1500);
       });
+    });
+
+    document.querySelectorAll(".carousel").forEach((carousel) => {
+      const track = carousel.querySelector(".carousel-track");
+      const prevBtn = carousel.querySelector(".carousel-nav.prev");
+      const nextBtn = carousel.querySelector(".carousel-nav.next");
+
+      // Scrolls by exactly one card + gap so each click lands flush on the
+      // next card instead of an arbitrary partial-card offset.
+      function cardStep() {
+        const card = track.querySelector(".card");
+        if (!card) return 0;
+        const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+        return card.getBoundingClientRect().width + gap;
+      }
+
+      function updateNavState() {
+        const maxScroll = track.scrollWidth - track.clientWidth;
+        prevBtn.disabled = track.scrollLeft <= 4;
+        nextBtn.disabled = track.scrollLeft >= maxScroll - 4;
+      }
+
+      prevBtn.addEventListener("click", () => track.scrollBy({ left: -cardStep(), behavior: "smooth" }));
+      nextBtn.addEventListener("click", () => track.scrollBy({ left: cardStep(), behavior: "smooth" }));
+      track.addEventListener("scroll", updateNavState);
+      window.addEventListener("resize", updateNavState);
+      updateNavState();
     });
   </script>
 </body>

@@ -1,0 +1,102 @@
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Medium.ttf") format("truetype");
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
+  overflow: hidden;
+}
+
+#card {
+  position: relative;
+  width: 320px;
+  margin: 24px;
+  border-radius: 14px;
+  padding: 20px 22px 16px;
+  background: rgba(22, 18, 32, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px -16px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transform: translateY(8px);
+}
+#card.show {
+  animation: card-in 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+@keyframes card-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#title-row {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 16px;
+  border-radius: 999px;
+  background: #7c5cff;
+}
+#title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+#stats {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+.stat-label {
+  color: #a89bd4;
+  font-weight: 500;
+}
+.stat-value {
+  color: #e6e1f2;
+  font-weight: 700;
+}
+#top-gifter-row {
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+#top-gifter-row .stat-value {
+  color: #ffd166;
+}
+
+#empty {
+  text-align: center;
+  color: #6f6490;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 0;
+}

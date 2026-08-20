@@ -116,6 +116,105 @@ header p {
   color: #fff;
 }
 
+.summary-btn {
+  flex: 0 0 auto;
+  border: 1px solid rgba(124, 92, 255, 0.4);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.22), rgba(34, 193, 195, 0.14));
+  color: #f1ecff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.summary-btn:hover { background: linear-gradient(135deg, rgba(124, 92, 255, 0.32), rgba(34, 193, 195, 0.2)); }
+
+#timer-panel {
+  flex: 0 0 auto;
+  max-width: 720px;
+  margin: 0 24px 16px;
+  padding: 14px 16px;
+  background: rgba(124, 92, 255, 0.06);
+  border: 1px solid rgba(124, 92, 255, 0.2);
+  border-radius: 14px;
+}
+.timer-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.timer-panel-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c9b8ff;
+}
+.timer-readout {
+  font-weight: 700;
+  font-size: 18px;
+  color: #f1ecff;
+  font-variant-numeric: tabular-nums;
+}
+.timer-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.timer-custom,
+.timer-message-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.timer-custom input[type="number"] {
+  width: 52px;
+  background: rgba(124, 92, 255, 0.08);
+  border: 1px solid rgba(124, 92, 255, 0.25);
+  color: #f1ecff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 8px;
+  border-radius: 8px;
+}
+.timer-custom span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #a89bd4;
+}
+.timer-message-row input[type="text"] {
+  flex: 1 1 220px;
+  background: rgba(124, 92, 255, 0.08);
+  border: 1px solid rgba(124, 92, 255, 0.25);
+  color: #f1ecff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.timer-btn {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1ecff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.timer-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.timer-btn.primary {
+  border-color: rgba(124, 92, 255, 0.4);
+  background: linear-gradient(135deg, #7c5cff, #5b3df0);
+}
+.timer-btn.primary:hover { filter: brightness(1.1); }
+
 /* Always shows what's currently pinned (or nothing), so the streamer
    doesn't have to scroll the list to check/clear it. */
 #pinned-bar {

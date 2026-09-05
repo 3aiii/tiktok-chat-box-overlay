@@ -36,6 +36,14 @@ _Avoid_: Banned word, filter word
 The on/off control a streamer uses to mute/unmute all spoken output; persists across page refresh.
 _Avoid_: Mute button
 
+**TTS provider**:
+Which backend actually synthesizes speech for the `/tts` route: `local` (self-hosted `tts-engine-project`,
+default) or `google` (Google Translate's unofficial endpoint, kept as a fallback). Switched from a control
+in the panel; server-held state (`ttsProvider` in `server.js`), in-memory only, resets to `local` on server
+restart. Distinct from **TTS toggle** — the toggle mutes speech entirely, this only picks which backend
+speaks when it's on.
+_Avoid_: TTS engine, voice engine
+
 **Session stats summary**:
 An on-demand snapshot of total Comments, total Gifts (count + diamonds), unique interacting viewers, and
 the top gifter by diamonds, accumulated in-memory since the server started. Shown only when the streamer

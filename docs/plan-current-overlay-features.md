@@ -7,9 +7,14 @@ chat comments aloud in Thai, without paid APIs.
 
 ## Decisions to grill
 
-1. **TTS provider**: use Google Translate's unofficial `translate_tts` endpoint (free, no key), proxied
-   through our own `/tts` server route to dodge Chrome's ORB block. Alternative considered and rejected:
-   Google Cloud TTS / Azure TTS (both need paid API keys).
+1. **TTS provider**: switchable at runtime from the panel between `local` (self-hosted `tts-engine-project`,
+   `POST /v1/tts`, default) and `google` (Google Translate's unofficial `translate_tts` endpoint, kept as a
+   fallback). Both proxied through our own `/tts` server route so the browser can fetch audio same-origin
+   with a plain GET regardless of which is selected; server holds the current choice in memory, resets to
+   `local` on restart. Requires the local engine running separately
+   (`uvicorn tts_engine.app:app`, see `D:\Work Space\Code Study\work-shop\2026\tts-engine-project`) for the
+   `local` option to work. Alternatives considered and rejected: Google Cloud TTS / Azure TTS (both need
+   paid API keys).
 2. **Gift streak collapsing**: only broadcast a gift event once `repeatEnd === 1` for streakable gifts
    (`gift.type === 1`), to avoid one card per tap during a held-down gift streak.
 3. **Repeat flood / Pattern collapse scope**: both only mute TTS — chat cards always render every message

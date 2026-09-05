@@ -120,12 +120,12 @@ connectWS((data) => {
   }
 }, setWsStatus);
 
-// Thai TTS via Google Translate's public TTS endpoint, proxied through our
-// own server (see /tts in server.js) since Chrome blocks the browser from
-// hitting translate.google.com directly (ORB). No API key needed.
-// Google caps each request at ~200 chars, so long text is split into chunks
-// and queued to play one after another (avoids overlapping audio when
-// multiple chat messages arrive close together).
+// Thai TTS via a self-hosted engine (tts-engine-project, POST /v1/tts),
+// proxied through our own server (see proxyLocalTts in server.js) so the
+// browser can fetch it same-origin with a plain GET. Long text is still
+// split into chunks and queued to play one after another (avoids
+// overlapping audio when multiple chat messages arrive close together);
+// 200 chars is just a reasonable chunk size now, not an upstream limit.
 const TTS_CHUNK_LIMIT = 200;
 const TTS_VOLUME = 0.4; // 0.0 (เงียบ) - 1.0 (เต็ม)
 const TTS_SPEED = 1.50; // 1.0 = ปกติ, >1 = อ่านเร็วขึ้น, <1 = ช้าลง

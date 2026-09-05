@@ -13,9 +13,30 @@ const HTTP_PORT = process.env.HTTP_PORT || 8080;
 const MOCK_MODE = process.env.MOCK === '1';
 const EASYDONATE_API_KEY = process.env.EASYDONATE_API_KEY || '';
 
+// Self-hosted TTS engine (tts-engine-project, POST /v1/tts, {text, lang} ->
+// streamed WAV). Switchable at runtime against the older Google proxy from
+// the panel widget -- see ttsProvider below and the /tts route.
+const TTS_ENGINE_URL = process.env.TTS_ENGINE_URL || 'http://127.0.0.1:8000/v1/tts';
+
+// In-memory only, resets to 'google' on server restart -- same convention as
+// timerState below. Switched via the panel's TTS provider control.
+let ttsProvider = 'google'; // 'local' | 'google'
+
+// Whether the server currently has a live TikTok room connection (real mode)
+// or is generating fake events (mock mode, always "connected"). Distinct from
+// a browser's own WebSocket link to this server -- that can be open while
+// TikTok itself is offline, which is exactly the case this flag exists to
+// surface on the control room's LIVE badge.
+let tiktokLiveConnected = MOCK_MODE;
+
+function tiktokConnectionPayload() {
+  return { type: 'tiktok-connection-state', connected: tiktokLiveConnected };
+}
+
 // Proxies Google Translate's TTS endpoint so overlay.html can fetch audio
 // same-origin (Chrome's ORB blocks the browser hitting translate.google.com
-// directly).
+// directly). No API key needed. Kept as a fallback alongside the local
+// engine; pick between them via ttsProvider.
 function proxyGoogleTts(text, res) {
   const ttsUrl =
     'https://translate.google.com/translate_tts?ie=UTF-8&tl=th&client=tw-ob&q=' +
@@ -43,10 +64,50 @@ function proxyGoogleTts(text, res) {
       }
     )
     .on('error', (err) => {
-      console.error('TTS proxy error:', err.message);
+      console.error('Google TTS proxy error:', err.message);
       if (!res.headersSent) res.writeHead(502);
       res.end('TTS proxy failed');
     });
+}
+
+// Proxies the local TTS engine so overlay.html can fetch audio same-origin
+// via a plain GET (the engine itself only accepts POST + a JSON body, which
+// a browser <audio>/new Audio(url) element can't send).
+function proxyLocalTts(text, lang, res) {
+  const requestBody = JSON.stringify({ text, lang });
+  const target = new URL(TTS_ENGINE_URL);
+
+  const ttsReq = http.request(
+    {
+      hostname: target.hostname,
+      port: target.port,
+      path: target.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(requestBody),
+      },
+    },
+    (ttsRes) => {
+      if (ttsRes.statusCode !== 200) {
+        res.writeHead(502);
+        res.end('TTS upstream error');
+        ttsRes.resume();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'audio/wav' });
+      ttsRes.pipe(res);
+    }
+  );
+
+  ttsReq.on('error', (err) => {
+    console.error('TTS proxy error (is tts-engine-project running?):', err.message);
+    if (!res.headersSent) res.writeHead(502);
+    res.end('TTS proxy failed');
+  });
+
+  ttsReq.write(requestBody);
+  ttsReq.end();
 }
 
 // EasyDonate host isn't documented anywhere public -- overridable via env in
@@ -194,7 +255,11 @@ const httpServer = http.createServer((req, res) => {
       res.end('Missing text param');
       return;
     }
-    proxyGoogleTts(text, res);
+    if (ttsProvider === 'google') {
+      proxyGoogleTts(text, res);
+    } else {
+      proxyLocalTts(text, 'th', res);
+    }
     return;
   }
 
@@ -345,6 +410,8 @@ wss.on('connection', (ws) => {
   // /panel late) would show idle/zero until the next control action instead
   // of picking up wherever the countdown actually is.
   ws.send(JSON.stringify(timerStatePayload()));
+  ws.send(JSON.stringify({ type: 'tts-provider-state', provider: ttsProvider }));
+  ws.send(JSON.stringify(tiktokConnectionPayload()));
 
   ws.on('message', (raw) => {
     let message;
@@ -383,6 +450,10 @@ wss.on('connection', (ws) => {
     } else if (message.type === 'timer-set-message') {
       timerState.message = message.message;
       broadcast(timerStatePayload());
+    } else if (message.type === 'set-tts-provider') {
+      if (message.provider !== 'local' && message.provider !== 'google') return;
+      ttsProvider = message.provider;
+      broadcast({ type: 'tts-provider-state', provider: ttsProvider });
     }
   });
 });
@@ -456,10 +527,14 @@ if (MOCK_MODE) {
     tiktokConnection.connect()
       .then((state) => {
         console.log(`Connected to TikTok live room ${state.roomId} (@${TIKTOK_USERNAME})`);
+        tiktokLiveConnected = true;
+        broadcast(tiktokConnectionPayload());
       })
       .catch((err) => {
         console.error('Failed to connect to TikTok live:', err.message);
         console.error('Retrying in 10s... (make sure the account is live and the username is correct)');
+        tiktokLiveConnected = false;
+        broadcast(tiktokConnectionPayload());
         setTimeout(connectToTikTok, 10000);
       });
   }
@@ -512,6 +587,8 @@ if (MOCK_MODE) {
 
   tiktokConnection.on(WebcastEvent.DISCONNECTED, () => {
     console.log('Disconnected from TikTok live. Retrying...');
-    setTimeout(() => tiktokConnection.connect().catch(() => {}), 5000);
+    tiktokLiveConnected = false;
+    broadcast(tiktokConnectionPayload());
+    setTimeout(connectToTikTok, 5000);
   });
 }

@@ -1,36 +1,11 @@
 const MAX_LINES = 20;
 const chatBox = document.getElementById("chat-box");
 
-// Toggle TTS on/off; persisted so a page refresh (or OBS reload) keeps the choice.
-const ttsToggleBtn = document.getElementById("tts-toggle");
-let ttsEnabled = localStorage.getItem("ttsEnabled") !== "off";
-
-const TTS_ICON_ON =
-  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-  '<path d="M4 9v6h4l5 5V4L8 9H4z"/>' +
-  '<path d="M16.5 8.5a5 5 0 0 1 0 7"/>' +
-  '<path d="M19 6a9 9 0 0 1 0 12"/>' +
-  "</svg>";
-const TTS_ICON_OFF =
-  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-  '<path d="M4 9v6h4l5 5V4L8 9H4z"/>' +
-  '<path d="M16 9l6 6"/>' +
-  '<path d="M22 9l-6 6"/>' +
-  "</svg>";
-
-function renderTtsToggle() {
-  ttsToggleBtn.innerHTML = ttsEnabled ? TTS_ICON_ON : TTS_ICON_OFF;
-  ttsToggleBtn.classList.toggle("off", !ttsEnabled);
-}
-
-ttsToggleBtn.addEventListener("click", () => {
-  ttsEnabled = !ttsEnabled;
-  localStorage.setItem("ttsEnabled", ttsEnabled ? "on" : "off");
-  renderTtsToggle();
-  if (!ttsEnabled) stopSpeaking();
-});
-
-renderTtsToggle();
+// On/off for reading chat aloud -- controlled from the Setup & links page
+// (index.html) via WS broadcast (type "tts-enabled-state") instead of a
+// button on this overlay itself, since chat.html runs as an OBS browser
+// source with no convenient way to click anything on it.
+let ttsEnabled = true;
 
 // Anti-spam: if the same person repeats the same comment more than 3
 // times in a row, keep showing the chat bubble but stop reading it aloud.
@@ -44,11 +19,27 @@ function isSpamRepeat(userKey, comment) {
   return count > SPAM_REPEAT_LIMIT;
 }
 
-// Collapses a repeated pattern inside a single message down to 3 reps
-// before reading it aloud, e.g. "####" -> "###", "#$@#$@#$@#$@" -> "#$@#$@#$@".
-// Tries pattern lengths 1-12 chars (non-greedy) and cuts anything repeating 4+ times.
+// Collapses a repeated pattern inside a single message before reading it
+// aloud. Two cases, kept to different rep counts:
+// - the repeat spans the whole message ("5555555555" -> "55", "สวัสดี สวัสดี
+//   สวัสดี" -> "สวัสดี สวัสดี"): keep 2 reps, since that's still a deliberate
+//   repeated word/pattern rather than a single word.
+// - the repeat is trailing elongation stuck onto a real word ("เก่งมากกกกกกก"
+//   -> "เก่งมาก", "ฮ่าๆๆๆๆๆๆ" -> "ฮ่าๆ"): collapse to 1 rep, back to the plain
+//   word, since here the repeat isn't the message's own content.
+// Distinguished by match position: a match starting at index 0 has no word
+// in front of it, so it's the whole-message case.
+// Tries pattern lengths 1-24 chars (non-greedy, wide enough to cover a word
+// plus its trailing space) and cuts anything repeating 3+ times. A sentinel
+// space is appended before matching and stripped after: without it, a unit
+// like "สวัสดี " (word + trailing space) never matches its last repetition,
+// since the message ends right after that word with no space following.
 function collapseRepeatsForSpeech(text) {
-  return text.replace(/(.{1,12}?)\1{3,}/g, (_match, group) => group.repeat(3));
+  const collapsed = (text + " ").replace(
+    /(.{1,24}?)\1{2,}/g,
+    (_match, group, offset) => group.repeat(offset === 0 ? 2 : 1)
+  );
+  return text.endsWith(" ") ? collapsed : collapsed.replace(/ $/, "");
 }
 
 // Comments matching this are still shown in chat but never read aloud.
@@ -58,6 +49,69 @@ const BLOCKED_TTS_PATTERN = /หี[่-๋]?(?![ก-ฮ])|แตด/;
 
 function containsBlockedWord(text) {
   return BLOCKED_TTS_PATTERN.test(text);
+}
+
+// Rejoins words that were spaced out one letter at a time to dodge word
+// filters, e.g. "เ ก" or "G      A       Y" -> "เก" / "GAY". Splits on
+// whitespace and glues back together any run of 2+ consecutive single-char
+// tokens; anything that's already a normal (2+ char) word is left alone, so
+// ordinary short sentences like "ไป กิน ข้าว" aren't touched.
+function collapseSpacedSingleChars(text) {
+  const tokens = text.split(/\s+/);
+  const result = [];
+  let i = 0;
+  while (i < tokens.length) {
+    if (tokens[i].length === 1) {
+      let j = i;
+      let combined = "";
+      while (j < tokens.length && tokens[j].length === 1) {
+        combined += tokens[j];
+        j++;
+      }
+      result.push(j - i >= 2 ? combined : tokens[i]);
+      i = j;
+    } else {
+      result.push(tokens[i]);
+      i++;
+    }
+  }
+  return result.join(" ");
+}
+
+// Comments containing "เกย์"/"เก" (as a standalone word, not part of words
+// like "เก่งมาก" or "เกม") or "gay" in any casing are still shown in chat but
+// never read aloud.
+const GAY_WORD_PATTERN = /^(?:เกย์?|เก|gay)$/i;
+
+function containsGayWord(text) {
+  const normalized = collapseSpacedSingleChars(text);
+  return normalized.split(/\s+/).some((word) => GAY_WORD_PATTERN.test(word));
+}
+
+// Comments containing a "+" are still shown in chat but never read aloud.
+// Ordinary chat doesn't use "+" between numbers, so this only ever fires on
+// junk like "๔๑+ ๔+๒ ๔๑๒๓๑+๒๑+๒๑+๔" -- meaningless digit strings, not a
+// repeated pattern (so isGibberishSpam wouldn't catch it) and not a real word
+// (so it isn't spoken meaningfully either).
+function containsMathSymbolSpam(text) {
+  return text.includes("+");
+}
+
+// Comments made of a short chunk repeated many times with inconsistent
+// spacing (spam combos like "ตุก จะจะ ตุก จี๊ ๆ ๆ ตุก จะ จะ ตุก จี๊ ๆ ๆ ...")
+// are still shown in chat but never read aloud. Plain repeats like
+// "5555555555" or "สวัสดี สวัสดี สวัสดี" get shortened by
+// collapseRepeatsForSpeech before this check ever runs, so by the time text
+// reaches here it should already be short -- if a repeated chunk of 12+
+// chars still survives (whitespace stripped, so spacing variants like
+// "จะจะ" vs "จะ จะ" count as the same unit), that repetition couldn't be
+// collapsed cleanly and the message is treated as spam instead of spoken.
+const GIBBERISH_SPAM_PATTERN = /(.{2,24}?)\1{2,}/;
+
+function isGibberishSpam(collapsedText) {
+  const compact = collapsedText.replace(/\s+/g, "");
+  const match = compact.match(GIBBERISH_SPAM_PATTERN);
+  return !!match && match[0].length >= 12;
 }
 
 // Small confetti burst near the bottom-right chat box whenever a gift comes in.
@@ -102,6 +156,17 @@ function addGiftLine(nickname, giftName, repeatCount, avatarUrl, giftImage) {
 const setWsStatus = attachStatusIndicator();
 
 connectWS((data) => {
+  if (data.type === "tts-enabled-state") {
+    ttsEnabled = data.enabled;
+    if (!ttsEnabled) stopSpeaking();
+    return;
+  }
+
+  if (data.type === "tts-speed-state") {
+    ttsSpeed = data.speed;
+    return;
+  }
+
   if (data.type === "gift") {
     addGiftLine(data.nickname, data.giftName, data.repeatCount, data.avatarUrl, data.giftImage);
     celebrateGift();
@@ -115,8 +180,15 @@ connectWS((data) => {
   if (data.type !== "chat") return;
   addChatLine(data.nickname, data.comment, data.avatarUrl);
   const userKey = data.user || data.nickname;
-  if (!isSpamRepeat(userKey, data.comment) && !containsBlockedWord(data.comment)) {
-    speak(`${data.nickname} ${collapseRepeatsForSpeech(data.comment)}`);
+  const collapsedComment = collapseRepeatsForSpeech(data.comment);
+  if (
+    !isSpamRepeat(userKey, data.comment) &&
+    !containsBlockedWord(data.comment) &&
+    !containsGayWord(data.comment) &&
+    !containsMathSymbolSpam(data.comment) &&
+    !isGibberishSpam(collapsedComment)
+  ) {
+    speak(`${data.nickname} ${collapsedComment}`);
   }
 }, setWsStatus);
 
@@ -128,7 +200,10 @@ connectWS((data) => {
 // 200 chars is just a reasonable chunk size now, not an upstream limit.
 const TTS_CHUNK_LIMIT = 200;
 const TTS_VOLUME = 0.4; // 0.0 (เงียบ) - 1.0 (เต็ม)
-const TTS_SPEED = 1.50; // 1.0 = ปกติ, >1 = อ่านเร็วขึ้น, <1 = ช้าลง
+// 1.0 = ปกติ, >1 = อ่านเร็วขึ้น, <1 = ช้าลง. Default matches the server's
+// initial ttsSpeed; actual value is controlled from the Setup page and
+// synced over WS (see "tts-speed-state" below), same pattern as ttsEnabled.
+let ttsSpeed = 1.5;
 const speakQueue = [];
 let isSpeaking = false;
 let currentAudio = null;
@@ -185,7 +260,7 @@ function playChunks(chunks, i, onDone) {
   const url = "/tts?text=" + encodeURIComponent(chunks[i]);
   const audio = new Audio(url);
   audio.volume = TTS_VOLUME;
-  audio.playbackRate = TTS_SPEED;
+  audio.playbackRate = ttsSpeed;
   currentAudio = audio;
   const next = () => playChunks(chunks, i + 1, onDone);
   audio.onended = next;

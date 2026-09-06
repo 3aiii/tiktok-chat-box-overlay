@@ -25,16 +25,43 @@ The same viewer sending the identical Comment more than 3 times in a row; suppre
 _Avoid_: Spam repeat, flood, duplicate
 
 **Pattern collapse**:
-A single Comment containing a character or short substring repeated 4+ times in a row (e.g. "####", "#$@#$@#$@#$@"); trimmed to 3 reps before being spoken. A within-one-Comment, cosmetic concept — unrelated to Repeat flood even though both currently use the threshold 3.
+A single Comment containing a character or short substring repeated 3+ times in a row (e.g. "####",
+"#$@#$@#$@#$@", "เก่งมากกกกกกก"); trimmed before being spoken, never before being shown. Two cases,
+trimmed to a different length depending on where the repeat sits:
+- the repeat spans the *whole* Comment (starts at its first character, e.g. "5555555555", "สวัสดี
+  สวัสดี สวัสดี") → trimmed to 2 reps
+- the repeat is *trailing elongation stuck onto a real word* (e.g. "เก่งมากกกกกกก" → "เก่งมาก",
+  "ฮ่าๆๆๆๆๆๆ" → "ฮ่าๆ") → trimmed to 1 rep, i.e. the plain word
+
+A within-one-Comment, cosmetic concept — unrelated to Repeat flood despite the historical coincidence
+noted in Flagged ambiguities below.
 _Avoid_: Spam collapse, dedup
 
+**Gibberish spam**:
+A Comment made of a short chunk repeated 3+ times where the repeats aren't spaced *consistently* (e.g.
+"ตุก จะจะ ตุก จี๊ ๆ ๆ ตุก จะ จะ ตุก จี๊ ๆ ๆ ตุก จะจะ ตุก จี๊ ๆ ๆ ตุก จะจะเตร" — "จะจะ" vs "จะ จะ" differ
+in spacing between reps). Unlike Pattern collapse, the repeats aren't literally identical so they can't
+be cleanly trimmed — the entire Comment is suppressed from TTS instead, same as a Blocked word.
+_Avoid_: Combo spam, spam pattern
+
 **Blocked word**:
-A word or pattern that, if present in a Comment, prevents that Comment from being spoken — the Comment is still shown.
+A word or pattern that, if present in a Comment, prevents that Comment from being spoken — the Comment
+is still shown. Beyond a fixed word/pattern list, this also covers two standalone match strategies:
+a whole-word match on "เกย์"/"เก"/"gay" in any casing — including when spaced out one letter at a time
+to dodge the filter (e.g. "เ ก", "G A Y") — and any Comment containing a "+" character (catches
+meaningless digit/symbol strings like "๔๑+๔+๒..." that aren't a repeated pattern, so Gibberish spam
+wouldn't catch them either). All suppress-only, same as every other Blocked word match.
 _Avoid_: Banned word, filter word
 
 **TTS toggle**:
 The on/off control a streamer uses to mute/unmute all spoken output; persists across page refresh.
 _Avoid_: Mute button
+
+**TTS speed**:
+Playback rate for spoken TTS (1.0 = normal, >1 faster, <1 slower). Server-held state, in-memory only,
+resets to 1.5 on restart — same convention as TTS provider below. Switched from the same panel control
+group as TTS toggle; synced to every connected client over WS.
+_Avoid_: Playback rate, voice speed
 
 **TTS provider**:
 Which backend actually synthesizes speech for the `/tts` route: `local` (self-hosted `tts-engine-project`,
@@ -61,8 +88,9 @@ _Avoid_: Break screen, intermission timer
 ## Relationships
 
 - A **Gift streak** resolves into exactly one Gift announcement
-- A **Repeat flood**, a **Pattern collapse**, and a **Blocked word** all suppress speech only — none hides a Comment or a Gift card
-- The **TTS toggle**, when off, suppresses all speech regardless of Repeat flood, Pattern collapse, or Blocked word state
+- A **Repeat flood**, a **Pattern collapse**, a **Gibberish spam**, and a **Blocked word** all suppress speech only — none hides a Comment or a Gift card
+- The **TTS toggle**, when off, suppresses all speech regardless of Repeat flood, Pattern collapse, Gibberish spam, or Blocked word state
+- **TTS speed** only changes how fast speech plays — it has no effect on whether a Comment is suppressed by any of the above
 
 ## Example dialogue
 
@@ -76,5 +104,6 @@ _Avoid_: Break screen, intermission timer
 
 - "Spam" was used loosely to mean both a viewer flooding identical Comments and a single Comment
   containing a repeated character pattern — resolved: these are distinct concepts, **Repeat flood** and
-  **Pattern collapse** respectively. They currently share the threshold value 3 by coincidence, not by
-  design; do not couple them into one constant.
+  **Pattern collapse** respectively. They used to share the threshold value 3 by coincidence; that's
+  since diverged — Pattern collapse now trims to 2 or 1 reps depending on where the repeat sits, while
+  Repeat flood is still >3. Do not assume they're coupled, and do not couple them into one constant.

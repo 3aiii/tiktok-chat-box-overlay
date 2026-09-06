@@ -391,6 +391,20 @@
             <button type="button" data-value="local">Local Engine</button>
             <button type="button" data-value="google" class="active">Google</button>
           </div>
+          <div class="segmented" id="tts-enabled" data-value="on">
+            <span class="seg-label">เสียงอ่านแชท</span>
+            <button type="button" data-value="on" class="active">เปิด</button>
+            <button type="button" data-value="off">ปิด</button>
+          </div>
+          <div class="segmented" id="tts-speed" data-value="1.5">
+            <span class="seg-label">ความเร็ว</span>
+            <button type="button" data-value="0.75">0.75x</button>
+            <button type="button" data-value="1">1x</button>
+            <button type="button" data-value="1.25">1.25x</button>
+            <button type="button" data-value="1.5" class="active">1.5x</button>
+            <button type="button" data-value="1.75">1.75x</button>
+            <button type="button" data-value="2">2x</button>
+          </div>
         </div>
 
         <div class="panel-box">
@@ -579,6 +593,37 @@
     ttsProviderGroup.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.value === provider));
   }
 
+  // ---- TTS on/off switch (was a button on chat.html itself; moved here so
+  // it's controlled from one place instead of per-browser-source) ----
+  const ttsEnabledGroup = document.getElementById("tts-enabled");
+  ttsEnabledGroup.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const enabled = btn.dataset.value === "on";
+      renderTtsEnabledState(enabled);
+      ws.send({ type: "set-tts-enabled", enabled });
+    });
+  });
+  function renderTtsEnabledState(enabled) {
+    const value = enabled ? "on" : "off";
+    ttsEnabledGroup.dataset.value = value;
+    ttsEnabledGroup.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.value === value));
+  }
+
+  // ---- TTS playback speed ----
+  const ttsSpeedGroup = document.getElementById("tts-speed");
+  ttsSpeedGroup.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const speed = Number(btn.dataset.value);
+      renderTtsSpeedState(speed);
+      ws.send({ type: "set-tts-speed", speed });
+    });
+  });
+  function renderTtsSpeedState(speed) {
+    const value = String(speed);
+    ttsSpeedGroup.dataset.value = value;
+    ttsSpeedGroup.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.value === value));
+  }
+
   // ---- session stats summary (on-demand only, no auto-refresh) ----
   function renderStats(data) {
     document.getElementById("stat-comments").textContent = data.comments;
@@ -607,8 +652,10 @@
 
   const ws = connectWS((data) => {
     if (data.type === "tts-provider-state") renderTtsProviderState(data.provider);
+    if (data.type === "tts-enabled-state") renderTtsEnabledState(data.enabled);
+    if (data.type === "tts-speed-state") renderTtsSpeedState(data.speed);
     if (data.type === "summary") renderStats(data);
-    if (data.type === "tiktok-connection-state") renderConnection(data.connected);
+    if (data.type === "tiktok-connection-state") renderConnection(data.connected, data.detail);
   }, (wsConnected) => {
     if (!wsConnected) renderConnection(false, "ขาดการเชื่อมต่อ server…");
   });

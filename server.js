@@ -22,6 +22,16 @@ const TTS_ENGINE_URL = process.env.TTS_ENGINE_URL || 'http://127.0.0.1:8000/v1/t
 // timerState below. Switched via the panel's TTS provider control.
 let ttsProvider = 'google'; // 'local' | 'google'
 
+// Global on/off for reading chat aloud, in-memory only (resets to true on
+// restart). Was a per-browser localStorage toggle button on chat.html itself;
+// moved here + broadcast over WS so it can be controlled from the Setup page
+// instead, same pattern as ttsProvider above.
+let ttsEnabled = true;
+
+// TTS playback speed (1.0 = normal, >1 = faster, <1 = slower), same
+// in-memory/broadcast convention as ttsProvider and ttsEnabled above.
+let ttsSpeed = 1.5;
+
 // Whether the server currently has a live TikTok room connection (real mode)
 // or is generating fake events (mock mode, always "connected"). Distinct from
 // a browser's own WebSocket link to this server -- that can be open while
@@ -29,11 +39,24 @@ let ttsProvider = 'google'; // 'local' | 'google'
 // surface on the control room's LIVE badge.
 let tiktokLiveConnected = MOCK_MODE;
 
-function tiktokConnectionPayload() {
-  return { type: 'tiktok-connection-state', connected: tiktokLiveConnected };
+// How many consecutive times connectToTikTok has failed since the last
+// success; surfaced in tiktokConnectionPayload's detail so the control
+// room's badge shows retry progress instead of a static offline message.
+let tiktokReconnectAttempt = 0;
+
+function tiktokConnectionPayload(detailOverride) {
+  const payload = { type: 'tiktok-connection-state', connected: tiktokLiveConnected };
+  if (!tiktokLiveConnected) {
+    payload.detail =
+      detailOverride ||
+      (tiktokReconnectAttempt > 0
+        ? `กำลังลองเชื่อมต่อใหม่ครั้งที่ ${tiktokReconnectAttempt} (ตรวจสอบว่า live อยู่และ username ถูกต้อง)`
+        : undefined);
+  }
+  return payload;
 }
 
-// Proxies Google Translate's TTS endpoint so overlay.html can fetch audio
+// Proxies Google Translate's TTS endpoint so the chat widget can fetch audio
 // same-origin (Chrome's ORB blocks the browser hitting translate.google.com
 // directly). No API key needed. Kept as a fallback alongside the local
 // engine; pick between them via ttsProvider.
@@ -70,7 +93,7 @@ function proxyGoogleTts(text, res) {
     });
 }
 
-// Proxies the local TTS engine so overlay.html can fetch audio same-origin
+// Proxies the local TTS engine so the chat widget can fetch audio same-origin
 // via a plain GET (the engine itself only accepts POST + a JSON body, which
 // a browser <audio>/new Audio(url) element can't send).
 function proxyLocalTts(text, lang, res) {
@@ -239,7 +262,8 @@ function handleLeaderboard(req, res) {
     });
 }
 
-// Serve overlay.html so it can be added as a Browser Source in OBS/Streamlabs
+// Serves each overlay widget's page (see PAGE_ROUTES below) plus static
+// assets, so each one can be added as its own Browser Source in OBS/Streamlabs
 const httpServer = http.createServer((req, res) => {
   const reqUrl = new URL(req.url, `http://localhost:${HTTP_PORT}`);
 
@@ -411,6 +435,8 @@ wss.on('connection', (ws) => {
   // of picking up wherever the countdown actually is.
   ws.send(JSON.stringify(timerStatePayload()));
   ws.send(JSON.stringify({ type: 'tts-provider-state', provider: ttsProvider }));
+  ws.send(JSON.stringify({ type: 'tts-enabled-state', enabled: ttsEnabled }));
+  ws.send(JSON.stringify({ type: 'tts-speed-state', speed: ttsSpeed }));
   ws.send(JSON.stringify(tiktokConnectionPayload()));
 
   ws.on('message', (raw) => {
@@ -454,6 +480,14 @@ wss.on('connection', (ws) => {
       if (message.provider !== 'local' && message.provider !== 'google') return;
       ttsProvider = message.provider;
       broadcast({ type: 'tts-provider-state', provider: ttsProvider });
+    } else if (message.type === 'set-tts-enabled') {
+      ttsEnabled = !!message.enabled;
+      broadcast({ type: 'tts-enabled-state', enabled: ttsEnabled });
+    } else if (message.type === 'set-tts-speed') {
+      const speed = Number(message.speed);
+      if (!Number.isFinite(speed) || speed < 0.5 || speed > 3) return;
+      ttsSpeed = speed;
+      broadcast({ type: 'tts-speed-state', speed: ttsSpeed });
     }
   });
 });
@@ -470,6 +504,16 @@ if (MOCK_MODE) {
     'ทำไมเสียงเบาจัง',
     'ขอลิงก์หน่อย',
     'อยู่มาดูตลอดเลยค่ะ',
+    'พี่ครับ ฿.฿.฿.฿.฿.฿. ตุก จะจะ ตุก จี๊ ๆ ๆ ตุก จะ จะ ตุก จี๊ ๆ ๆ ตุก จะจะ ตุก จี๊ ๆ ๆ ตุก จะจะเตร',
+    '5555555555',
+    'สวัสดี สวัสดี สวัสดี',
+    'ฮ่าๆๆๆๆๆๆๆๆๆๆๆๆๆๆ',
+    'เก่งมาก เก่งมาก เก่งมาก เก่งมาก',
+    'จัดไป จัดไป จัดไป จัดไป จัดไป',
+    'เก่งมากกกกกกก',
+    'เก เก  เก เก เก เก เก เก เก เก เก เก เก',
+    'ดี ก ก ก   กก ก ก  ก     ก  ปแผ ๔๑+ ๔+๒ ๔๑๒๓๑+๒๑+๒๑+๔ +ูู๑๒ ฿',
+    'เล่นเก',
   ];
 
   const mockAvatar = (nickname) => `https://i.pravatar.cc/150?u=${encodeURIComponent(nickname)}`;
@@ -528,12 +572,14 @@ if (MOCK_MODE) {
       .then((state) => {
         console.log(`Connected to TikTok live room ${state.roomId} (@${TIKTOK_USERNAME})`);
         tiktokLiveConnected = true;
+        tiktokReconnectAttempt = 0;
         broadcast(tiktokConnectionPayload());
       })
       .catch((err) => {
         console.error('Failed to connect to TikTok live:', err.message);
         console.error('Retrying in 10s... (make sure the account is live and the username is correct)');
         tiktokLiveConnected = false;
+        tiktokReconnectAttempt++;
         broadcast(tiktokConnectionPayload());
         setTimeout(connectToTikTok, 10000);
       });
@@ -588,7 +634,7 @@ if (MOCK_MODE) {
   tiktokConnection.on(WebcastEvent.DISCONNECTED, () => {
     console.log('Disconnected from TikTok live. Retrying...');
     tiktokLiveConnected = false;
-    broadcast(tiktokConnectionPayload());
+    broadcast(tiktokConnectionPayload('หลุดจากไลฟ์ กำลังเชื่อมต่อใหม่...'));
     setTimeout(connectToTikTok, 5000);
   });
 }

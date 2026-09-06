@@ -14,7 +14,9 @@
 #chat-box {
   position: static;
   width: 560px;
-  gap: 5px;
+  height: 22vh;
+  max-height: 22vh;
+  gap: 2px;
   border-radius: 18px;
   /* padding: 14px; */
   /* background: linear-gradient(160deg, rgba(0, 196, 204, 0.18), rgba(124, 92, 255, 0.18)); */
@@ -31,7 +33,7 @@
   align-self: flex-start;
   /* background: rgba(0, 0, 0, 0.50); */
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 2px 12px;
   gap: 8px;
   max-width: 100%;
   width: fit-content;
@@ -46,10 +48,11 @@
 }
 
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
   background: linear-gradient(135deg, #00c4cc, #7c5cff);
-  font-size: 11px;
+  font-size: 9px;
 }
 
 .nickname {
@@ -68,13 +71,13 @@
 .bubble {
   background: none !important;
   color: #fff;
-  /* (32px avatar - 20.25px line box) / 2 -- pushes just the first line down
+  /* (24px avatar - 20.25px line box) / 2 -- pushes just the first line down
      to align its visual center with the avatar/nickname, whether the comment
      is 1 line or wraps to several. Flex-centering the whole bubble only
      worked for 1 line (see prior comment, since replaced): once content
-     exceeds 32px there's no space left to center within, so the first line
+     exceeds 24px there's no space left to center within, so the first line
      drifted back to the container top instead of tracking the avatar. */
-  padding: 6px 0 0;
+  padding: 2px 0 0;
   border-radius: 0;
   box-shadow: none !important;
   font-size: 15px;
@@ -99,7 +102,7 @@
 /* ---- Gift line ---- */
 
 .gift-line {
-  background: rgba(100, 40, 180, 0.55) !important;
+  background: none !important;
 }
 
 .gift-line .nickname {
@@ -138,9 +141,4 @@
 
 .member-line .comment {
   color: #f9a8d4 !important;
-}
-
-/* ---- TTS toggle — stacked right above the chat box, inside #chat-wrapper ---- */
-#tts-toggle {
-  position: static;
 }

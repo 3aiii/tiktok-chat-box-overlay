@@ -51,6 +51,16 @@ function containsBlockedWord(text) {
   return BLOCKED_TTS_PATTERN.test(text);
 }
 
+// Song requests are shown in chat like any other comment but never read aloud:
+// the body is a YouTube URL, which TTS spells out one character at a time.
+// Kept in step with SONG_COMMAND in server.js -- both decide what counts as a
+// request, so a change to one belongs in the other.
+const SONG_COMMAND_PATTERN = /^\s*\/music(?:\s|$)/i;
+
+function isSongRequest(text) {
+  return SONG_COMMAND_PATTERN.test(text || "");
+}
+
 // Rejoins words that were spaced out one letter at a time to dodge word
 // filters, e.g. "เ ก" or "G      A       Y" -> "เก" / "GAY". Splits on
 // whitespace and glues back together any run of 2+ consecutive single-char
@@ -114,6 +124,63 @@ function isGibberishSpam(collapsedText) {
   return !!match && match[0].length >= 12;
 }
 
+// The default TikTok handle is a word with a long run of digits stuck on the
+// end ("user4512512512"). Reading the digits out loud spells all twelve of
+// them; dropping them makes every such viewer sound like the same person
+// called "user". So the run is kept, shortened to its first few digits --
+// "user4512512512" is read as "user451", which is short enough to say and
+// still tells two viewers apart.
+const HANDLE_DIGITS_SPOKEN = 3;
+
+// Strips the digits and symbols out of a nickname before it's read aloud, so
+// auto-generated TikTok handles like "@daweqwe78874515q5e1878q122zxc" don't
+// get spelled out digit by digit -- only the letters are spoken
+// ("daweqweqqzxc"). Letters split apart by digits are glued back together
+// rather than left as separate one-letter tokens, which TTS would spell out.
+// Ordinary nicknames are mostly letters already, so this leaves them
+// essentially untouched.
+// Returns "" when nothing but digits/symbols was there, in which case the
+// caller reads the comment on its own without a name in front of it.
+function sanitizeNicknameForSpeech(nickname) {
+  const raw = (nickname || "").trim();
+
+  // Only the "words then trailing digits" shape keeps any digits. The words
+  // may be separated by spaces, "_", "." or "-" ("user_4512512512",
+  // "Toy Chan 12345"), and the separator in front of the digits is dropped.
+  // A nickname with digits scattered through it
+  // ("daweqwe78874515q5e1878q122zxc") does not match and is still stripped
+  // bare below -- shortening each of its runs would leave more digits to
+  // spell out, not fewer.
+  const handle = /^@?([\p{L}\p{M}]+(?:[\s._-]+[\p{L}\p{M}]+)*)[\s._-]*(\d+)$/u.exec(raw);
+  if (handle) {
+    const name = handle[1].replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
+    return name + handle[2].slice(0, HANDLE_DIGITS_SPOKEN);
+  }
+
+  return raw
+    .replace(/[^\p{L}\p{M}\s]+/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Comments that are just a long run of digits/letters/symbols with no real
+// words ("51d5wa1dw7a9+9+-655dwad15w1a5d1651", "08164-416610-414141-758254--556")
+// are still shown in chat but never read aloud -- TTS would spell them out one
+// character at a time. Detected as: no Thai script at all, at least 8
+// characters once whitespace is stripped, and at least half of them digits.
+// Real Latin chat ("hello", "good job") has no digits and stays readable;
+// anything containing Thai is left to the other filters.
+const GIBBERISH_MIN_LENGTH = 8;
+const GIBBERISH_DIGIT_RATIO = 0.5;
+
+function isAlphanumericGibberish(text) {
+  const compact = (text || "").replace(/\s+/g, "");
+  if (compact.length < GIBBERISH_MIN_LENGTH) return false;
+  if (/[\u0E00-\u0E7F]/.test(compact)) return false;
+  const digits = (compact.match(/\d/g) || []).length;
+  return digits / compact.length >= GIBBERISH_DIGIT_RATIO;
+}
+
 // Small confetti burst near the bottom-right chat box whenever a gift comes in.
 // canvas-confetti is self-hosted via /vendor/confetti.js; skip quietly if it failed to load.
 function celebrateGift() {
@@ -171,7 +238,8 @@ connectWS((data) => {
     addGiftLine(data.nickname, data.giftName, data.repeatCount, data.avatarUrl, data.giftImage);
     celebrateGift();
     const times = data.repeatCount > 1 ? ` ${data.repeatCount} ชิ้น` : "";
-    speak(`ขอบคุณ ${data.nickname} ที่ส่ง ${data.giftName}${times}`);
+    const gifterName = sanitizeNicknameForSpeech(data.nickname);
+    speak(`ขอบคุณ ${gifterName} ที่ส่ง ${data.giftName}${times}`.replace(/\s+/g, " "));
     return;
   }
 
@@ -186,9 +254,13 @@ connectWS((data) => {
     !containsBlockedWord(data.comment) &&
     !containsGayWord(data.comment) &&
     !containsMathSymbolSpam(data.comment) &&
-    !isGibberishSpam(collapsedComment)
+    !isGibberishSpam(collapsedComment) &&
+    !isAlphanumericGibberish(data.comment) &&
+    !isSongRequest(data.comment)
   ) {
-    speak(`${data.nickname} ${collapsedComment}`);
+    // The comment alone, no name in front: the nickname is already on screen
+    // in the chat line, and reading it doubled the length of every short message.
+    speak(collapsedComment);
   }
 }, setWsStatus);
 

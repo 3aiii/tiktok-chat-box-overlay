@@ -434,6 +434,9 @@
             <div class="steps">
               <div class="step"><span class="num">i</span><span class="text">Chat / Pinned / Top Donate / Timer / Summary ใช้ปุ่ม "คัดลอกลิงก์" วางใน Browser Source ได้เลย</span></div>
               <div class="step"><span class="num">i</span><span class="text">Panel เปิดเป็นแท็บ browser ปกติเท่านั้น — ไม่ใช่ widget สำหรับ OBS</span></div>
+              <div class="step"><span class="num">i</span><span class="text">Music เป็นแหล่งเสียงจริง — ใน OBS อย่าติ๊ก <b>Shutdown source when not visible</b> ไม่งั้นเพลงจะหยุดเมื่อสลับ scene</span></div>
+              <div class="step"><span class="num">i</span><span class="text">ขอเพลงต้องตั้ง <b>YOUTUBE_API_KEY</b> ใน .env ก่อน ไม่มี key = feature ปิด</span></div>
+              <div class="step"><span class="num">i</span><span class="text">เปิดโหมดขอเพลงแล้วควรปิดเสียงอ่านแชทเอง — ระบบไม่ได้ผูกให้ ทั้งสองสวิตช์อิสระต่อกัน</span></div>
               <div class="step"><span class="num">i</span><span class="text">สรุปยอด (Comments/Gifts/Diamonds) กดแสดงเองจากแถบด้านซ้าย ไม่มีการอัปเดตอัตโนมัติ</span></div>
             </div>
           </div>
@@ -453,6 +456,7 @@
     { path: "/top-donate", title: "Top Donate", icon: "🏆", a: "#ffd54a", b: "#a259ff", desc: "10 อันดับโดเนทสูงสุด จาก EasyDonate (mock ถ้ายังไม่ตั้ง API key)" },
     { path: "/timer", title: "BRB Timer", icon: "⏱️", a: "#ffd166", b: "#ff8a5c", desc: "นับถอยหลังพักเบรก คุมจาก Panel" },
     { path: "/summary", title: "Summary", icon: "📊", a: "#22c1c3", b: "#7c5cff", desc: "การ์ดสรุปยอด คอมเมนต์/ของขวัญ/ผู้ชม กดแสดงจาก Panel" },
+    { path: "/music", title: "Music", icon: "🎵", a: "#ff5c8a", b: "#7c5cff", desc: "เล่นเพลงที่คนดูขอผ่านลิงก์ YouTube — อนุมัติทีละเพลงจาก Panel" },
   ];
 
   const TAB_WIDGETS = [

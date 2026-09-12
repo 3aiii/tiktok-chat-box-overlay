@@ -345,3 +345,185 @@ header p {
 
 #list-wrap::-webkit-scrollbar { width: 8px; }
 #list-wrap::-webkit-scrollbar-thumb { background: rgba(124, 92, 255, 0.35); border-radius: 8px; }
+
+/* Reuses the #timer-panel box treatment so the control sections read as one
+   stack rather than several unrelated designs. */
+#song-panel {
+  flex: 0 0 auto;
+  max-width: 720px;
+  margin: 0 24px 16px;
+  padding: 14px 16px;
+  background: rgba(124, 92, 255, 0.06);
+  border: 1px solid rgba(124, 92, 255, 0.2);
+  border-radius: 14px;
+}
+.song-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.song-panel-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c9b8ff;
+}
+
+.song-warn {
+  display: none;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 91, 91, 0.12);
+  border: 1px solid rgba(255, 91, 91, 0.35);
+  color: #ffb3b3;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#song-now {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(34, 193, 195, 0.16), rgba(124, 92, 255, 0.12));
+  border: 1px solid rgba(34, 193, 195, 0.35);
+}
+#song-now.show { display: flex; }
+#song-now .song-now-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c1c3;
+  box-shadow: 0 0 10px 2px rgba(34, 193, 195, 0.8);
+}
+#song-now .song-now-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#song-now .song-now-text b { color: #c9b8ff; font-weight: 700; }
+
+.song-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.song-col { flex: 1 1 240px; min-width: 0; }
+.song-col-head {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8f7fc9;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.song-col-head span {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(124, 92, 255, 0.2);
+  color: #c9b8ff;
+  text-align: center;
+}
+.song-col-empty {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6f6490;
+  padding: 4px 2px;
+}
+
+.song-filler { margin-top: 12px; }
+.song-filler-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.song-filler-add input[type="text"] {
+  flex: 1 1 240px;
+  background: rgba(124, 92, 255, 0.08);
+  border: 1px solid rgba(124, 92, 255, 0.25);
+  color: #f1ecff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.song-filler-add input::placeholder { color: #7a6ba8; }
+.song-filler-add input:focus { outline: none; border-color: #7c5cff; }
+
+.song-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: rgba(24, 18, 40, 0.5);
+  border: 1px solid rgba(124, 92, 255, 0.14);
+  margin-bottom: 4px;
+}
+.song-row-text { flex: 1 1 auto; min-width: 0; }
+.song-row-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #e5ddff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.song-row-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: #8f86ab;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.song-row-btn {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1ecff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.song-row-btn.ok { color: #7dffb0; border-color: rgba(125, 255, 176, 0.3); }
+.song-row-btn.ok:hover { background: rgba(125, 255, 176, 0.14); }
+.song-row-btn.no { color: #ff9b9b; border-color: rgba(255, 155, 155, 0.28); }
+.song-row-btn.no:hover { background: rgba(255, 91, 91, 0.14); }
+
+#song-idle {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(124, 92, 255, 0.08);
+  border: 1px dashed rgba(124, 92, 255, 0.35);
+}
+#song-idle.show { display: flex; }
+#song-idle .song-idle-text {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 500;
+  color: #8f86ab;
+}
+

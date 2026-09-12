@@ -221,11 +221,155 @@ function renderTimerState(state) {
   }
 }
 
+// ---- Song request controls ----
+const songEnabledGroup = document.getElementById("song-enabled");
+const songNoKeyEl = document.getElementById("song-nokey");
+const songNowEl = document.getElementById("song-now");
+const songIdleEl = document.getElementById("song-idle");
+const songNowTitle = document.getElementById("song-now-title");
+const songNowBy = document.getElementById("song-now-by");
+const songPendingEl = document.getElementById("song-pending");
+const songPendingEmpty = document.getElementById("song-pending-empty");
+const songPendingCount = document.getElementById("song-pending-count");
+const songApprovedEl = document.getElementById("song-approved");
+const songApprovedEmpty = document.getElementById("song-approved-empty");
+const songApprovedCount = document.getElementById("song-approved-count");
+const fillerLinkInput = document.getElementById("filler-link");
+const fillerErrorEl = document.getElementById("filler-error");
+const fillerListEl = document.getElementById("filler-list");
+const fillerEmptyEl = document.getElementById("filler-empty");
+const fillerCountEl = document.getElementById("song-filler-count");
+
+songEnabledGroup.querySelectorAll("button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    ws.send({ type: "set-song-enabled", enabled: btn.dataset.value === "on" });
+  });
+});
+
+document.getElementById("song-start").addEventListener("click", () => ws.send({ type: "song-start" }));
+document.getElementById("song-skip").addEventListener("click", () => ws.send({ type: "song-skip" }));
+document.getElementById("song-stop").addEventListener("click", () => ws.send({ type: "song-stop" }));
+
+function addFiller() {
+  const link = fillerLinkInput.value.trim();
+  if (!link) return;
+  fillerErrorEl.style.display = "none";
+  ws.send({ type: "filler-add", link });
+  fillerLinkInput.value = "";
+}
+document.getElementById("filler-add").addEventListener("click", addFiller);
+fillerLinkInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") addFiller();
+});
+
+function formatDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// One row shape for all three lists -- they differ only in which buttons hang
+// off the end, so the buttons are passed in rather than branched on here.
+function songRow(song, subtitle, buttons) {
+  const row = document.createElement("div");
+  row.className = "song-row";
+
+  const text = document.createElement("div");
+  text.className = "song-row-text";
+  const title = document.createElement("div");
+  title.className = "song-row-title";
+  title.textContent = song.title;
+  const sub = document.createElement("div");
+  sub.className = "song-row-sub";
+  sub.textContent = `${subtitle} · ${formatDuration(song.durationSec)}`;
+  text.appendChild(title);
+  text.appendChild(sub);
+  row.appendChild(text);
+
+  buttons.forEach(({ label, className, onClick }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `song-row-btn ${className}`;
+    btn.textContent = label;
+    btn.addEventListener("click", onClick);
+    row.appendChild(btn);
+  });
+  return row;
+}
+
+function renderSongState(state) {
+  songNoKeyEl.style.display = state.hasApiKey ? "none" : "block";
+
+  const value = state.enabled ? "on" : "off";
+  songEnabledGroup.dataset.value = value;
+  songEnabledGroup.querySelectorAll("button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.value === value);
+  });
+
+  if (state.nowPlaying) {
+    songNowEl.classList.add("show");
+    songNowTitle.textContent = state.nowPlaying.title;
+    songNowBy.textContent = state.nowPlaying.isFiller
+      ? "(Filler)"
+      : `— ขอโดย ${state.nowPlaying.nickname}`;
+  } else {
+    songNowEl.classList.remove("show");
+  }
+
+  // Nothing plays on its own, so offer an explicit start -- but only when there
+  // is actually something for it to play.
+  const canStart = !state.nowPlaying && (state.approved.length > 0 || state.fillers.length > 0);
+  songIdleEl.classList.toggle("show", canStart);
+
+  songPendingCount.textContent = state.pending.length;
+  songPendingEmpty.style.display = state.pending.length === 0 ? "block" : "none";
+  songPendingEl.textContent = "";
+  state.pending.forEach((song) => {
+    songPendingEl.appendChild(
+      songRow(song, song.nickname, [
+        { label: "✓", className: "ok", onClick: () => ws.send({ type: "song-approve", id: song.id }) },
+        { label: "✕", className: "no", onClick: () => ws.send({ type: "song-reject", id: song.id }) },
+      ])
+    );
+  });
+
+  songApprovedCount.textContent = state.approved.length;
+  songApprovedEmpty.style.display = state.approved.length === 0 ? "block" : "none";
+  songApprovedEl.textContent = "";
+  state.approved.forEach((song) => {
+    songApprovedEl.appendChild(
+      songRow(song, song.nickname, [
+        { label: "✕", className: "no", onClick: () => ws.send({ type: "song-reject", id: song.id }) },
+      ])
+    );
+  });
+
+  fillerCountEl.textContent = state.fillers.length;
+  fillerEmptyEl.style.display = state.fillers.length === 0 ? "block" : "none";
+  fillerListEl.textContent = "";
+  state.fillers.forEach((song) => {
+    fillerListEl.appendChild(
+      songRow(song, song.channel || "Filler", [
+        { label: "✕", className: "no", onClick: () => ws.send({ type: "filler-remove", id: song.id }) },
+      ])
+    );
+  });
+}
+
 const setWsStatus = attachStatusIndicator();
 
 ws = connectWS((data) => {
   if (data.type === "timer-state") {
     renderTimerState(data);
+    return;
+  }
+  if (data.type === "song-state") {
+    renderSongState(data);
+    return;
+  }
+  if (data.type === "filler-add-failed") {
+    fillerErrorEl.textContent = data.reason;
+    fillerErrorEl.style.display = "block";
     return;
   }
   if (data.type !== "chat") return;

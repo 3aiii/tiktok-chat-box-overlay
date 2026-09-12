@@ -1,0 +1,102 @@
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Medium.ttf") format("truetype");
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Kanit";
+  src: url("/fonts/Kanit-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
+  overflow: hidden;
+}
+
+/* The player is what actually produces the audio, so it has to stay rendered --
+   display:none or an off-screen position gets the iframe throttled and the
+   sound stops. opacity:0 keeps it playing while showing only our own card. */
+#player-host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 320px;
+  height: 180px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#card {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  display: none;
+  align-items: center;
+  gap: 14px;
+  width: 360px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: rgba(22, 18, 32, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px -16px rgba(0, 0, 0, 0.6);
+}
+#card.show { display: flex; }
+
+#eq {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 22px;
+}
+#eq span {
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #22c1c3, #7c5cff);
+  animation: eq-bounce 0.9s ease-in-out infinite;
+}
+#eq span:nth-child(1) { height: 40%; animation-delay: 0s; }
+#eq span:nth-child(2) { height: 80%; animation-delay: 0.15s; }
+#eq span:nth-child(3) { height: 55%; animation-delay: 0.3s; }
+#eq span:nth-child(4) { height: 95%; animation-delay: 0.45s; }
+@keyframes eq-bounce {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+#meta { flex: 1 1 auto; min-width: 0; }
+
+#title {
+  font-weight: 700;
+  font-size: 15px;
+  color: #e6e1f2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#by {
+  margin-top: 2px;
+  font-weight: 500;
+  font-size: 12.5px;
+  color: #a89bd4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A Filler song is the streamer's own, not a viewer's -- worth reading as
+   quieter, since there is no one to credit. */
+#card.filler #eq span { background: linear-gradient(180deg, #6f6490, #4b4468); }
+#card.filler #title { color: #b9b2cc; }

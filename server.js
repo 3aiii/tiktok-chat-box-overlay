@@ -224,6 +224,274 @@ function buildSummaryPayload() {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// Song requests (see docs/adr/0001-youtube-link-only-song-requests.md)
+//
+// A Song request is a YouTube link, never a title we search for -- search.list
+// costs 100 quota units against a 10,000/day budget, which would silence the
+// feature after ~100 requests mid-stream. videos.list costs 1, so link-only is
+// effectively unmetered. The API key is required rather than optional: without
+// it the feature is off, instead of running blind.
+// ---------------------------------------------------------------------------
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
+const YOUTUBE_REGION = process.env.YOUTUBE_REGION || 'TH';
+const SONG_MAX_DURATION_SEC = Number(process.env.SONG_MAX_DURATION_SEC || 600);
+// Overridable so the test harness can point at a scratch file -- otherwise
+// running the tests would overwrite the streamer's real curated Filler songs.
+const FILLER_SONGS_FILE = process.env.FILLER_SONGS_FILE || path.join(__dirname, 'filler-songs.json');
+
+// How many just-played videos stay un-requestable, so the same track cannot
+// bounce straight back into the queue the moment it ends.
+const RECENT_VIDEO_MEMORY = 20;
+
+const YOUTUBE_LINK_PATTERNS = [
+  /youtube\.com\/watch\?(?:[^\s]*&)?v=([A-Za-z0-9_-]{11})/i,
+  /youtu\.be\/([A-Za-z0-9_-]{11})/i,
+  /youtube\.com\/shorts\/([A-Za-z0-9_-]{11})/i,
+  /youtube\.com\/live\/([A-Za-z0-9_-]{11})/i,
+  /youtube\.com\/embed\/([A-Za-z0-9_-]{11})/i,
+];
+
+// A request has to be opted into with the command word. Without it every
+// link anyone happens to paste in chat -- a clip they are talking about, a
+// reply to someone else -- lands in the streamer's approval queue as noise.
+const SONG_COMMAND = /^\s*\/music(?:\s|$)/i;
+
+function extractVideoId(text) {
+  for (const pattern of YOUTUBE_LINK_PATTERNS) {
+    const match = pattern.exec(text);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// ISO 8601 durations, which is the only format the API reports ("PT4M13S").
+// The whole time section is optional: an in-progress live stream reports "P0D",
+// which has to parse as 0 so it is refused as a live stream rather than as an
+// unreadable duration.
+function parseIsoDuration(iso) {
+  const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso || '');
+  if (!match) return null;
+  const [, d, h, m, sec] = match.map((v) => (v === undefined ? 0 : Number(v)));
+  return d * 86400 + h * 3600 + m * 60 + sec;
+}
+
+// The three things only videos.list can tell us -- embeddable, length and
+// region -- all fail *silently* on stream if unchecked: the player just shows a
+// black rectangle mid-live with nothing explaining why. Checking here means a
+// bad link is refused at request time instead of surfacing 40 minutes later.
+function fetchVideoDetails(videoId) {
+  return new Promise((resolve, reject) => {
+    const url =
+      'https://www.googleapis.com/youtube/v3/videos' +
+      `?part=snippet,contentDetails,status&id=${encodeURIComponent(videoId)}` +
+      `&key=${encodeURIComponent(YOUTUBE_API_KEY)}`;
+
+    https
+      .get(url, (apiRes) => {
+        let body = '';
+        apiRes.on('data', (chunk) => (body += chunk));
+        apiRes.on('end', () => {
+          if (apiRes.statusCode !== 200) {
+            reject(new Error(`YouTube API ${apiRes.statusCode}: ${body.slice(0, 200)}`));
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      })
+      .on('error', reject);
+  });
+}
+
+// Returns { ok: true, song } or { ok: false, reason }. The reason is for the
+// server log and the panel only -- a refusal is never sent back to the asker,
+// since the room chat is read-only to us (see CONTEXT.md).
+async function validateVideo(videoId) {
+  const payload = await fetchVideoDetails(videoId);
+  const item = payload.items && payload.items[0];
+  if (!item) return { ok: false, reason: 'ไม่พบวิดีโอ (ถูกลบหรือเป็นส่วนตัว)' };
+
+  if (item.status && item.status.embeddable === false) {
+    return { ok: false, reason: 'เจ้าของปิดการฝัง (embed) ไว้' };
+  }
+
+  const durationSec = parseIsoDuration(item.contentDetails && item.contentDetails.duration);
+  if (durationSec === null) return { ok: false, reason: 'อ่านความยาวไม่ได้' };
+  if (durationSec === 0) return { ok: false, reason: 'เป็นไลฟ์สด ไม่ใช่คลิป' };
+  if (durationSec > SONG_MAX_DURATION_SEC) {
+    return { ok: false, reason: `ยาวเกิน ${Math.round(SONG_MAX_DURATION_SEC / 60)} นาที` };
+  }
+
+  const restriction = item.contentDetails && item.contentDetails.regionRestriction;
+  if (restriction && restriction.blocked && restriction.blocked.includes(YOUTUBE_REGION)) {
+    return { ok: false, reason: `เล่นไม่ได้ในภูมิภาค ${YOUTUBE_REGION}` };
+  }
+  if (restriction && restriction.allowed && !restriction.allowed.includes(YOUTUBE_REGION)) {
+    return { ok: false, reason: `เล่นไม่ได้ในภูมิภาค ${YOUTUBE_REGION}` };
+  }
+
+  return {
+    ok: true,
+    song: {
+      videoId,
+      title: (item.snippet && item.snippet.title) || videoId,
+      channel: (item.snippet && item.snippet.channelTitle) || '',
+      durationSec,
+    },
+  };
+}
+
+// Filler songs are the one piece of song state written to disk. A viewer
+// request is worth minutes and is trivially re-made; a Filler song is something
+// the streamer curated and would resent rebuilding every stream.
+function loadFillerSongs() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(FILLER_SONGS_FILE, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+let fillerSongs = loadFillerSongs();
+
+function saveFillerSongs() {
+  fs.writeFile(FILLER_SONGS_FILE, JSON.stringify(fillerSongs, null, 2), (err) => {
+    if (err) console.error('Failed to save filler-songs.json:', err.message);
+  });
+}
+
+// In-memory, deliberately: an approval given three hours ago was given in a
+// moment that no longer exists, so a restart drops the queue rather than
+// resuming it. Only fillerSongs above survives.
+const songState = {
+  enabled: false,
+  pending: [], // awaiting the streamer's approval
+  approved: [], // approved, waiting their turn
+  nowPlaying: null,
+  recentVideoIds: [],
+};
+
+let songSeq = 0;
+function nextSongId() {
+  songSeq += 1;
+  return `s${Date.now().toString(36)}-${songSeq}`;
+}
+
+function songStatePayload() {
+  return {
+    type: 'song-state',
+    enabled: songState.enabled,
+    hasApiKey: Boolean(YOUTUBE_API_KEY),
+    pending: songState.pending,
+    approved: songState.approved,
+    nowPlaying: songState.nowPlaying,
+    fillers: fillerSongs,
+    maxDurationSec: SONG_MAX_DURATION_SEC,
+  };
+}
+
+function isVideoTaken(videoId) {
+  return (
+    songState.pending.some((s) => s.videoId === videoId) ||
+    songState.approved.some((s) => s.videoId === videoId) ||
+    (songState.nowPlaying && songState.nowPlaying.videoId === videoId) ||
+    songState.recentVideoIds.includes(videoId)
+  );
+}
+
+// Round-robin over the fillers so a long dry spell does not replay the same one.
+let fillerCursor = 0;
+function nextFillerSong() {
+  if (fillerSongs.length === 0) return null;
+  const filler = fillerSongs[fillerCursor % fillerSongs.length];
+  fillerCursor += 1;
+  return { ...filler, id: nextSongId(), isFiller: true, nickname: null };
+}
+
+// An approved viewer request always wins over a Filler song; playing a viewer
+// request consumes it, playing a Filler song does not.
+function advanceSong() {
+  const next = songState.approved.shift() || nextFillerSong();
+  songState.nowPlaying = next || null;
+  if (next) {
+    songState.recentVideoIds.push(next.videoId);
+    while (songState.recentVideoIds.length > RECENT_VIDEO_MEMORY) {
+      songState.recentVideoIds.shift();
+    }
+  }
+  broadcast(songStatePayload());
+}
+
+// Called from the CHAT handler for every Comment. Everything here is silent to
+// the asker by design -- the per-viewer cap is a server-side filter that keeps
+// the panel queue usable, not a rule viewers are told about.
+async function handleSongRequestComment(user, nickname, comment) {
+  if (!songState.enabled || !YOUTUBE_API_KEY) return;
+
+  const text = comment || '';
+  if (!SONG_COMMAND.test(text)) return;
+
+  const videoId = extractVideoId(text);
+  if (!videoId) return;
+
+  if (songState.pending.some((s) => s.user === user)) {
+    console.log(`[song] dropped ${nickname}: already has one pending`);
+    return;
+  }
+  if (isVideoTaken(videoId)) {
+    console.log(`[song] dropped ${nickname}: ${videoId} already queued or just played`);
+    return;
+  }
+
+  try {
+    const result = await validateVideo(videoId);
+    if (!result.ok) {
+      console.log(`[song] refused ${nickname} (${videoId}): ${result.reason}`);
+      return;
+    }
+    // Re-checked after the await: the lookup took a network round-trip, and
+    // another Comment from the same viewer (or for the same video) may have
+    // landed in the meantime.
+    if (songState.pending.some((s) => s.user === user) || isVideoTaken(videoId)) return;
+
+    songState.pending.push({
+      ...result.song,
+      id: nextSongId(),
+      user,
+      nickname,
+      isFiller: false,
+      requestedAt: Date.now(),
+    });
+    console.log(`[song] queued "${result.song.title}" from ${nickname}`);
+    broadcast(songStatePayload());
+  } catch (err) {
+    console.error(`[song] lookup failed for ${videoId}:`, err.message);
+  }
+}
+
+// The streamer's own requests take the same path through validateVideo as a
+// viewer's -- same checks, same refusals -- and differ only in where they land.
+async function addFillerSong(link) {
+  const videoId = extractVideoId(link || '');
+  if (!videoId) return { ok: false, reason: 'ไม่พบลิงก์ YouTube ในข้อความ' };
+  if (fillerSongs.some((f) => f.videoId === videoId)) {
+    return { ok: false, reason: 'เพลงนี้อยู่ใน Filler แล้ว' };
+  }
+  const result = await validateVideo(videoId);
+  if (!result.ok) return result;
+
+  fillerSongs.push({ ...result.song, id: nextSongId() });
+  saveFillerSongs();
+  broadcast(songStatePayload());
+  return { ok: true };
+}
+
 // Proxied (not called directly from the browser) so the EasyDonate API key
 // never ships to the client. Falls back to mock data when no key is
 // configured, so the /top-donate widget works out of the box.
@@ -365,6 +633,7 @@ const httpServer = http.createServer((req, res) => {
     '/top-donate': 'widgets/top-donate/top-donate.html',
     '/summary': 'widgets/summary/summary.html',
     '/timer': 'widgets/timer/timer.html',
+    '/music': 'widgets/music/music.html',
   };
   const page = PAGE_ROUTES[reqUrl.pathname];
   if (!page) {
@@ -438,6 +707,7 @@ wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'tts-enabled-state', enabled: ttsEnabled }));
   ws.send(JSON.stringify({ type: 'tts-speed-state', speed: ttsSpeed }));
   ws.send(JSON.stringify(tiktokConnectionPayload()));
+  ws.send(JSON.stringify(songStatePayload()));
 
   ws.on('message', (raw) => {
     let message;
@@ -476,6 +746,73 @@ wss.on('connection', (ws) => {
     } else if (message.type === 'timer-set-message') {
       timerState.message = message.message;
       broadcast(timerStatePayload());
+    } else if (message.type === 'set-song-enabled') {
+      songState.enabled = !!message.enabled;
+      // Turning the feature off clears what is waiting but leaves whatever is
+      // playing alone -- cutting the audio mid-track would be the more
+      // surprising behaviour of the two.
+      if (!songState.enabled) {
+        songState.pending = [];
+        songState.approved = [];
+      }
+      broadcast(songStatePayload());
+    } else if (message.type === 'song-approve') {
+      const index = songState.pending.findIndex((s) => s.id === message.id);
+      if (index === -1) return;
+      const [song] = songState.pending.splice(index, 1);
+      songState.approved.push(song);
+      // Nothing playing means this one starts now rather than waiting for an
+      // end-of-song event that will never arrive.
+      if (!songState.nowPlaying) {
+        advanceSong();
+      } else {
+        broadcast(songStatePayload());
+      }
+    } else if (message.type === 'song-reject') {
+      // Covers both lists: the panel offers the same remove button on a song
+      // waiting for approval and on one already approved but not yet played.
+      const pendingIndex = songState.pending.findIndex((s) => s.id === message.id);
+      if (pendingIndex !== -1) {
+        songState.pending.splice(pendingIndex, 1);
+      } else {
+        const approvedIndex = songState.approved.findIndex((s) => s.id === message.id);
+        if (approvedIndex === -1) return;
+        songState.approved.splice(approvedIndex, 1);
+      }
+      broadcast(songStatePayload());
+    } else if (message.type === 'song-start') {
+      // Distinct from song-skip even though both land on advanceSong: nothing
+      // ever starts playing on its own, so the first song of a session needs an
+      // explicit start. Guarded on idle so a mis-click can't cut a live track.
+      if (songState.nowPlaying) return;
+      advanceSong();
+    } else if (message.type === 'song-skip') {
+      advanceSong();
+    } else if (message.type === 'song-stop') {
+      songState.nowPlaying = null;
+      broadcast(songStatePayload());
+    } else if (message.type === 'song-ended') {
+      // Sent by the /music widget when the player reports ENDED. Guarded on the
+      // id so a stale widget (one that reconnected after we already moved on)
+      // cannot skip the song that is currently playing.
+      if (!songState.nowPlaying || songState.nowPlaying.id !== message.id) return;
+      advanceSong();
+    } else if (message.type === 'song-error') {
+      if (!songState.nowPlaying || songState.nowPlaying.id !== message.id) return;
+      console.error(`[song] player error on ${songState.nowPlaying.videoId}, skipping`);
+      advanceSong();
+    } else if (message.type === 'filler-add') {
+      addFillerSong(message.link).then((result) => {
+        if (!result.ok) {
+          ws.send(JSON.stringify({ type: 'filler-add-failed', reason: result.reason }));
+        }
+      });
+    } else if (message.type === 'filler-remove') {
+      const next = fillerSongs.filter((f) => f.id !== message.id);
+      if (next.length === fillerSongs.length) return;
+      fillerSongs = next;
+      saveFillerSongs();
+      broadcast(songStatePayload());
     } else if (message.type === 'set-tts-provider') {
       if (message.provider !== 'local' && message.provider !== 'google') return;
       ttsProvider = message.provider;
@@ -535,7 +872,46 @@ if (MOCK_MODE) {
     };
     console.log(`[MOCK] ${message.nickname}: ${message.comment}`);
     broadcast(message);
+    handleSongRequestComment(message.user, message.nickname, message.comment);
   }, 2500);
+
+  // Song requests get their own stream rather than being sprinkled into
+  // mockComments, and are cycled instead of randomised, so a short session
+  // exercises every refusal path (too long, live stream, missing video,
+  // duplicate) instead of depending on luck. All ids are real videos.
+  const mockSongLinks = [
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ', // ok
+    'https://youtu.be/9bZkp7q19f0', // ok -- short link form
+    'https://www.youtube.com/watch?v=kJQP7kiw5Fk', // ok
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ', // refused: already requested
+    'https://www.youtube.com/watch?v=jfKfPfyJRdk', // refused: 1407-day live archive
+    'https://www.youtube.com/watch?v=JGwWNGJdvx8', // ok
+    'https://www.youtube.com/watch?v=4xDzrJKXOOY', // refused: in-progress live stream
+    'https://www.youtube.com/watch?v=fJ9rUzIMcZQ', // ok
+    'https://www.youtube.com/watch?v=zzzzzzzzzzz', // refused: no such video
+    'https://www.youtube.com/watch?v=OPf0YbXqDm0', // ok
+    'https://www.youtube.com/shorts/60ItHLz5WEA', // ok -- shorts form
+    'https://www.youtube.com/watch?v=RgKAFK5djSk', // ok
+    'https://www.youtube.com/watch?v=CevxZvSJLk8', // ok
+    'https://www.youtube.com/watch?v=hT_nvWreIhg', // ok
+  ];
+
+  let mockSongIndex = 0;
+  setInterval(() => {
+    const nickname = mockUsers[mockSongIndex % mockUsers.length];
+    const link = mockSongLinks[mockSongIndex % mockSongLinks.length];
+    mockSongIndex += 1;
+    const message = {
+      type: 'chat',
+      user: nickname,
+      nickname,
+      avatarUrl: mockAvatar(nickname),
+      comment: `/music ${link}`,
+    };
+    console.log(`[MOCK] ${nickname} ขอเพลง ${link}`);
+    broadcast(message);
+    handleSongRequestComment(message.user, message.nickname, message.comment);
+  }, 9000);
 
   setInterval(() => {
     const gift = mockGifts[Math.floor(Math.random() * mockGifts.length)];
@@ -596,6 +972,9 @@ if (MOCK_MODE) {
     };
     console.log(`${message.nickname}: ${message.comment}`);
     broadcast(message);
+    // A Song request is a Comment first and stays one -- it is broadcast and
+    // spoken like any other, and only *additionally* considered for the queue.
+    handleSongRequestComment(message.user, message.nickname, message.comment);
   });
 
   tiktokConnection.on(WebcastEvent.GIFT, (data) => {
@@ -638,3 +1017,8 @@ if (MOCK_MODE) {
     setTimeout(connectToTikTok, 5000);
   });
 }
+
+// Exposed only so the offline test harness can drive a Comment through the
+// song request path without a live TikTok room. Nothing in the server itself
+// reads this.
+module.exports = { handleSongRequestComment };

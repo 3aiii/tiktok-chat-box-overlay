@@ -279,6 +279,9 @@ let ttsSpeed = 1.5;
 const speakQueue = [];
 let isSpeaking = false;
 let currentAudio = null;
+// Cancels the in-flight chunk's stall watchdog (see playChunks) so a late
+// timer fire can't call next() after stopSpeaking already reset the queue.
+let cancelCurrentWatchdog = null;
 
 function speak(text) {
   if (!ttsEnabled) return;
@@ -290,6 +293,10 @@ function speak(text) {
 // right now — used when the user toggles TTS off mid-speech.
 function stopSpeaking() {
   speakQueue.length = 0;
+  if (cancelCurrentWatchdog) {
+    cancelCurrentWatchdog();
+    cancelCurrentWatchdog = null;
+  }
   if (currentAudio) {
     currentAudio.onended = null;
     currentAudio.onerror = null;
@@ -322,6 +329,13 @@ function splitForTts(text, maxLen) {
   return chunks;
 }
 
+// Upper bound on how long one chunk is allowed to take end-to-end. The
+// server has its own timeout against the upstream TTS engine, but that's a
+// second line of defense -- this one guards against anything on the client
+// side (a stalled fetch, a dropped response) that would otherwise never
+// fire onended/onerror and leave speakQueue stuck silent until reload.
+const TTS_CHUNK_TIMEOUT_MS = 20000;
+
 function playChunks(chunks, i, onDone) {
   if (i >= chunks.length) {
     onDone();
@@ -334,7 +348,27 @@ function playChunks(chunks, i, onDone) {
   audio.volume = TTS_VOLUME;
   audio.playbackRate = ttsSpeed;
   currentAudio = audio;
-  const next = () => playChunks(chunks, i + 1, onDone);
+
+  let settled = false;
+  const watchdog = setTimeout(() => {
+    if (settled) return;
+    console.warn("TTS chunk timed out, ข้ามท่อนนี้ไป:", chunks[i]);
+    next();
+  }, TTS_CHUNK_TIMEOUT_MS);
+  cancelCurrentWatchdog = () => {
+    settled = true;
+    clearTimeout(watchdog);
+  };
+
+  const next = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(watchdog);
+    cancelCurrentWatchdog = null;
+    audio.onended = null;
+    audio.onerror = null;
+    playChunks(chunks, i + 1, onDone);
+  };
   audio.onended = next;
   audio.onerror = () => {
     console.warn("Google TTS โหลดเสียงไม่สำเร็จ ข้ามท่อนนี้ไป:", chunks[i]);

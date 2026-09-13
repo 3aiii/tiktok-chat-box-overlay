@@ -65,7 +65,7 @@ function proxyGoogleTts(text, res) {
     'https://translate.google.com/translate_tts?ie=UTF-8&tl=th&client=tw-ob&q=' +
     encodeURIComponent(text.slice(0, 200));
 
-  https
+  const req = https
     .get(
       ttsUrl,
       {
@@ -91,6 +91,14 @@ function proxyGoogleTts(text, res) {
       if (!res.headersSent) res.writeHead(502);
       res.end('TTS proxy failed');
     });
+
+  // Without this, an upstream that accepts the connection but never sends a
+  // response (or stalls mid-stream) leaves the client's <audio> element
+  // waiting forever with no error/ended event -- the chat widget's TTS
+  // queue then never advances and stays silent until the server restarts.
+  req.setTimeout(15000, () => {
+    req.destroy(new Error('TTS upstream timed out'));
+  });
 }
 
 // Proxies the local TTS engine so the chat widget can fetch audio same-origin
@@ -127,6 +135,12 @@ function proxyLocalTts(text, lang, res) {
     console.error('TTS proxy error (is tts-engine-project running?):', err.message);
     if (!res.headersSent) res.writeHead(502);
     res.end('TTS proxy failed');
+  });
+
+  // Same stall-protection as proxyGoogleTts above -- a hung local engine
+  // would otherwise leave the client's TTS queue stuck silent forever.
+  ttsReq.setTimeout(15000, () => {
+    ttsReq.destroy(new Error('TTS engine timed out'));
   });
 
   ttsReq.write(requestBody);
@@ -832,7 +846,7 @@ wss.on('connection', (ws) => {
 if (MOCK_MODE) {
   console.log('MOCK mode: generating fake chat messages instead of connecting to TikTok.');
 
-  const mockUsers = ['nampeung_99', 'kai_gamer', 'pim.streamfan', 'tanawat_th', 'user_888'];
+  const mockUsers = ['nampeung_99', 'kai_gamer', 'pim.streamfan', 'tanawat_th', 'user_888','น้องแมว ม.4/3'];
   const mockComments = [
     'สวัสดีค่า มาดูตั้งแต่ต้นเลย',
     '5555 ตลกมาก',

@@ -181,13 +181,22 @@ function normalizeLeaderboard(payload) {
     .sort((a, b) => b.amount - a.amount);
 }
 
-// Hard-coded on top of whatever EasyDonate reports -- a real donor
-// (Huffy, 300 THB) who isn't tracked by the EasyDonate API but should still
-// show up on the leaderboard at the right rank.
-const EXTRA_LEADERBOARD_ENTRY = { name: 'Huffy', amount: 300 };
+// Real donors who aren't tracked by the EasyDonate API but should still show
+// up at the right rank -- kept in a gitignored file (not the repo) since it's
+// this streamer's own donor data, not something to ship in source control.
+const EXTRA_DONORS_FILE = process.env.EXTRA_DONORS_FILE || path.join(__dirname, 'extra-donors.json');
+
+function loadExtraDonors() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(EXTRA_DONORS_FILE, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 function withExtraEntry(list) {
-  return [...list, EXTRA_LEADERBOARD_ENTRY].sort((a, b) => b.amount - a.amount);
+  return [...list, ...loadExtraDonors()].sort((a, b) => b.amount - a.amount);
 }
 
 function sendJson(res, statusCode, data) {

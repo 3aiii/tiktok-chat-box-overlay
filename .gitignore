@@ -4,3 +4,4 @@ server.out.log
 server.err.log
 mock_run.log
 filler-songs.json
+extra-donors.json

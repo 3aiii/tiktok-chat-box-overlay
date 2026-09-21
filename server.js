@@ -196,7 +196,16 @@ function loadExtraDonors() {
 }
 
 function withExtraEntry(list) {
-  return [...list, ...loadExtraDonors()].sort((a, b) => b.amount - a.amount);
+  const merged = [...list];
+  for (const extra of loadExtraDonors()) {
+    const existing = merged.find((entry) => entry.name === extra.name);
+    if (existing) {
+      existing.amount += extra.amount;
+    } else {
+      merged.push(extra);
+    }
+  }
+  return merged.sort((a, b) => b.amount - a.amount);
 }
 
 function sendJson(res, statusCode, data) {
@@ -986,18 +995,31 @@ if (MOCK_MODE) {
   connectToTikTok();
 
   tiktokConnection.on(WebcastEvent.CHAT, (data) => {
-    const message = {
-      type: 'chat',
-      user: data.user?.uniqueId,
-      nickname: data.user?.nickname,
-      comment: data.content,
-      avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
-    };
-    console.log(`${message.nickname}: ${message.comment}`);
-    broadcast(message);
-    // A Song request is a Comment first and stays one -- it is broadcast and
-    // spoken like any other, and only *additionally* considered for the queue.
-    handleSongRequestComment(message.user, message.nickname, message.comment);
+    // Wrapped in try/catch so a malformed event (unexpected field shape from
+    // TikTok) logs and moves on instead of silently dropping the comment with
+    // no trace -- this is the only place a "comment never showed up" report
+    // could originate from on our side.
+    try {
+      const message = {
+        type: 'chat',
+        user: data.user?.uniqueId,
+        nickname: data.user?.nickname,
+        comment: data.content,
+        avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
+      };
+      console.log(`${message.nickname}: ${message.comment}`);
+      broadcast(message);
+      // A Song request is a Comment first and stays one -- it is broadcast and
+      // spoken like any other, and only *additionally* considered for the queue.
+      handleSongRequestComment(message.user, message.nickname, message.comment);
+    } catch (err) {
+      console.error('[chat] CHAT handler threw for raw event', {
+        uniqueId: data?.user?.uniqueId,
+        nickname: data?.user?.nickname,
+        content: data?.content,
+        error: err.stack || err.message,
+      });
+    }
   });
 
   tiktokConnection.on(WebcastEvent.GIFT, (data) => {

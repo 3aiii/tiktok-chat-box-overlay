@@ -223,6 +223,14 @@ function addGiftLine(nickname, giftName, repeatCount, avatarUrl, giftImage) {
 const setWsStatus = attachStatusIndicator();
 
 connectWS((data) => {
+  try {
+    handleWsMessage(data);
+  } catch (err) {
+    console.error("[chat] handler threw for", JSON.stringify(data), err);
+  }
+}, setWsStatus);
+
+function handleWsMessage(data) {
   if (data.type === "tts-enabled-state") {
     ttsEnabled = data.enabled;
     if (!ttsEnabled) stopSpeaking();
@@ -249,20 +257,22 @@ connectWS((data) => {
   addChatLine(data.nickname, data.comment, data.avatarUrl);
   const userKey = data.user || data.nickname;
   const collapsedComment = collapseRepeatsForSpeech(data.comment);
-  if (
-    !isSpamRepeat(userKey, data.comment) &&
-    !containsBlockedWord(data.comment) &&
-    !containsGayWord(data.comment) &&
-    !containsMathSymbolSpam(data.comment) &&
-    !isGibberishSpam(collapsedComment) &&
-    !isAlphanumericGibberish(data.comment) &&
-    !isSongRequest(data.comment)
-  ) {
+  const skipReasons = [];
+  if (isSpamRepeat(userKey, data.comment)) skipReasons.push("spam-repeat");
+  if (containsBlockedWord(data.comment)) skipReasons.push("blocked-word");
+  if (containsGayWord(data.comment)) skipReasons.push("gay-word");
+  if (containsMathSymbolSpam(data.comment)) skipReasons.push("math-symbol-spam");
+  if (isGibberishSpam(collapsedComment)) skipReasons.push("gibberish-spam");
+  if (isAlphanumericGibberish(data.comment)) skipReasons.push("alphanumeric-gibberish");
+  if (isSongRequest(data.comment)) skipReasons.push("song-request");
+  if (skipReasons.length) {
+    console.warn("[tts] skipped", JSON.stringify({ nickname: data.nickname, user: data.user, comment: data.comment, userKey, skipReasons }));
+  } else {
     // The comment alone, no name in front: the nickname is already on screen
     // in the chat line, and reading it doubled the length of every short message.
     speak(collapsedComment);
   }
-}, setWsStatus);
+}
 
 // Thai TTS via a self-hosted engine (tts-engine-project, POST /v1/tts),
 // proxied through our own server (see proxyLocalTts in server.js) so the

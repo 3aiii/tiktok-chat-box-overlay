@@ -6,12 +6,29 @@
 <link rel="stylesheet" href="/widgets/timer/timer.css" />
 </head>
 <body>
-  <div id="card">
-    <div id="clock">05:00</div>
-    <div id="message">พักเบรกสักครู่ เดี๋ยวกลับมา</div>
+  <div id="widget">
+    <div id="card">
+      <div id="shine" aria-hidden="true"></div>
+      <div id="row">
+        <div class="badge">
+          <div class="chip">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="13.5" r="8" />
+              <path d="M12 9.5v4l2.5 2" />
+              <path d="M9.5 2.5h5" />
+            </svg>
+          </div>
+        </div>
+        <div class="info">
+          <span id="status" class="name">นับถอยหลัง</span>
+        </div>
+        <div id="clock">05:00</div>
+      </div>
+    </div>
   </div>
 
   <script src="/widgets/shared/shared.js"></script>
+  <script src="/widgets/shared/themes.js"></script>
   <script src="/widgets/timer/timer.js"></script>
 </body>
 </html>

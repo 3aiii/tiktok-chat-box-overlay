@@ -1,5 +1,10 @@
 @font-face {
   font-family: "Kanit";
+  src: url("/fonts/Kanit-Medium.ttf") format("truetype");
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Kanit";
   src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
   font-weight: 600;
 }
@@ -7,11 +12,6 @@
   font-family: "Kanit";
   src: url("/fonts/Kanit-Bold.ttf") format("truetype");
   font-weight: 700;
-}
-@font-face {
-  font-family: "Kanit";
-  src: url("/fonts/Kanit-ExtraBold.ttf") format("truetype");
-  font-weight: 800;
 }
 
 * { box-sizing: border-box; }
@@ -24,45 +24,126 @@ html, body {
   overflow: hidden;
 }
 
-#card {
-  /* Fixed instead of fit-content -- otherwise the box visibly resizes as the
-     clock text and message length change (e.g. "05:00" vs "00:00", or a
-     longer/shorter BRB message set from the panel). */
-  width: 320px;
+/* Same card as /top-donate. Theme colors are set as CSS variables by
+   themes.js (?theme=...). Fixed width so the box doesn't resize as the
+   clock text or message changes. */
+#widget {
+  position: relative;
+  width: 400px;
   margin: 24px;
-  padding: 24px 40px;
-  border-radius: 20px;
-  text-align: center;
-  background: rgba(22, 18, 32, 0.85);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 28px -16px rgba(0, 0, 0, 0.6);
+}
+
+#card {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 22px;
+  border-radius: 18px;
+  background: var(--bg);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 30px rgba(24, 18, 48, 0.32);
+  transition: box-shadow 0.7s ease;
+}
+
+#shine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 45%;
+  pointer-events: none;
+  transform: skewX(-20deg);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  animation: shine-sweep 5s ease-in-out infinite;
+}
+@keyframes shine-sweep {
+  0% { left: -60%; }
+  30%, 100% { left: 120%; }
+}
+
+#row {
+  position: relative;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.badge {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chip {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: background 0.4s ease, color 0.4s ease;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sub {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--sub);
+}
+.name {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #clock {
-  font-weight: 800;
-  font-size: 64px;
-  color: #e6e1f2;
-  letter-spacing: 2px;
+  flex-shrink: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
+  transition: color 0.4s ease, opacity 0.4s ease;
 }
 
-#message {
-  margin-top: 6px;
-  font-weight: 600;
-  font-size: 16px;
-  word-break: break-word;
-  color: #a89bd4;
+/* running: the stopwatch chip takes the theme accent */
+#card.running .chip {
+  background: var(--accent);
+  color: #FFFFFF;
 }
 
-#card.paused #clock { color: #8f86ab; }
-#card.paused #message { color: #8f86ab; }
+#card.paused #clock { opacity: 0.5; }
 
-#card.ended #clock { color: #ffd166; }
+#card.ended #clock { color: var(--baht); }
+#card.ended .chip {
+  background: var(--accent);
+  color: #FFFFFF;
+  animation: chip-ring 1s ease-in-out infinite;
+}
 #card.ended {
   animation: timer-ended-pulse 1s ease-in-out infinite;
 }
+@keyframes chip-ring {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-14deg); }
+  40% { transform: rotate(14deg); }
+  60% { transform: rotate(0deg); }
+}
 @keyframes timer-ended-pulse {
-  0%, 100% { box-shadow: 0 10px 28px -16px rgba(0, 0, 0, 0.6); }
-  50% { box-shadow: 0 10px 28px -10px rgba(255, 209, 102, 0.55); }
+  0%, 100% { box-shadow: 0 14px 30px rgba(24, 18, 48, 0.32); }
+  50% { box-shadow: 0 14px 30px rgba(24, 18, 48, 0.32), 0 0 28px var(--accent); }
 }

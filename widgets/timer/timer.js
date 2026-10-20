@@ -1,6 +1,15 @@
+applyTheme(new URLSearchParams(location.search).get("theme")); // e.g. /timer?theme=ocean
+
 const cardEl = document.getElementById("card");
 const clockEl = document.getElementById("clock");
-const messageEl = document.getElementById("message");
+const statusEl = document.getElementById("status");
+
+const STATUS_LABELS = {
+  idle: "นับถอยหลัง",
+  running: "นับถอยหลัง",
+  paused: "หยุดชั่วคราว",
+  ended: "หมดเวลาแล้ว!",
+};
 
 let tickTimer = null;
 
@@ -28,7 +37,8 @@ function startTick(endsAt) {
 }
 
 function render(state) {
-  messageEl.textContent = state.message;
+  statusEl.textContent = STATUS_LABELS[state.status] || STATUS_LABELS.idle;
+  cardEl.classList.toggle("running", state.status === "running");
   cardEl.classList.toggle("ended", state.status === "ended");
   cardEl.classList.toggle("paused", state.status === "paused");
 

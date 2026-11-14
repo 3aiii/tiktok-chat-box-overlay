@@ -1,17 +1,15 @@
-@font-face {
-  font-family: "Kanit";
-  src: url("/fonts/Kanit-Medium.ttf") format("truetype");
-  font-weight: 500;
-}
-@font-face {
-  font-family: "Kanit";
-  src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
-  font-weight: 600;
-}
-@font-face {
-  font-family: "Kanit";
-  src: url("/fonts/Kanit-Bold.ttf") format("truetype");
-  font-weight: 700;
+@import url("/widgets/shared/kanit.css");
+
+/* --accent is overridable with ?accent=RRGGBB. --m-* are set per rank by the JS. */
+:root {
+  --accent: #FF8A3D;
+  --text: #F2F3F7;
+  --sub: #A3A7B5;
+  --m-c1: var(--accent);
+  --m-c2: var(--accent);
+  --m-border: rgba(255, 255, 255, 0.08);
+  --m-glow: rgba(0, 0, 0, 0);
+  --m-sheen: rgba(255, 255, 255, 0.2);
 }
 
 * { box-sizing: border-box; }
@@ -24,124 +22,180 @@ html, body {
   overflow: hidden;
 }
 
-/* Theme colors are set as CSS variables by top-donate.js (?theme=...). */
-#widget {
-  position: relative;
-  width: 400px;
-  margin: 24px;
-}
+#widget { width: 400px; margin: 24px; }
 
-/* box-shadow and transform are driven per frame from JS. */
-#card {
+#pill {
   position: relative;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  height: 80px;
+  padding: 10px 20px 10px 10px;
+  border-radius: 40px;
+  background: rgba(12, 13, 18, 0.88);
+  border: 1px solid var(--m-border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 22px var(--m-glow);
+  color: var(--text);
+  transition: border-color 0.6s ease, box-shadow 0.6s ease;
+}
+#pill.show { display: flex; }
+
+/* ---------- shine sweep (top 3 only) ---------- */
+#shine-clip {
+  position: absolute;
+  inset: 0;
+  border-radius: 40px;
   overflow: hidden;
-  padding: 18px 22px;
-  border-radius: 18px;
-  background: var(--bg);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 14px 30px rgba(24, 18, 48, 0.32);
-  transition: box-shadow 0.7s ease;
+  pointer-events: none;
+  display: none;
 }
-
+#pill.top #shine-clip { display: block; }
 #shine {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -60%;
-  width: 45%;
-  pointer-events: none;
-  transform: skewX(-20deg);
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  top: -10px;
+  bottom: -10px;
+  left: 0;
+  width: 60px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--m-sheen), rgba(255, 255, 255, 0));
+  animation: shine 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes shine {
+  0% { transform: translateX(-120px) skewX(-20deg); }
+  55%, 100% { transform: translateX(460px) skewX(-20deg); }
 }
 
-#stage {
+/* ---------- badge ---------- */
+#badge-wrap {
   position: relative;
-  height: 48px;
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
+  perspective: 300px;
 }
-
-/* Two slots stacked on top of each other: one leaving, one entering. */
-.slot {
+#badge {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
-  pointer-events: none;
-  opacity: 0;
-}
-
-.badge {
-  position: relative;
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
   justify-content: center;
 }
-.badge svg { overflow: visible; }
-
-.chip {
-  width: 38px;
-  height: 38px;
+.medal {
+  display: none;
+  width: 60px;
+  height: 60px;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45));
+}
+#pill.r1 .m1, #pill.r2 .m2, #pill.r3 .m3 { display: block; }
+.plain {
+  display: none;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  display: flex;
+  border: 2px solid var(--accent);
+  background: #1E222D;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
-  font-weight: 700;
-  background: var(--chip-bg);
-  color: var(--chip-fg);
-  box-shadow: inset 0 0 0 1px var(--border);
+}
+#pill.rest .plain { display: flex; }
+#plain-rank { font-size: 18px; font-weight: 700; line-height: 1; color: var(--accent); }
+
+/* gold extras: pulse rings + sparkles */
+.pulse, .tw { display: none; }
+#pill.r1 .pulse, #pill.r1 .tw { display: block; }
+.pulse {
+  position: absolute;
+  left: 13px;
+  top: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--m-c2);
+  animation: pulse 1.8s ease-out infinite;
+}
+.pulse.p2 { animation-delay: 0.9s; }
+@keyframes pulse {
+  0% { transform: scale(0.92); opacity: 0.7; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+.tw { position: absolute; fill: var(--m-c1); animation: twinkle 1.6s ease-in-out infinite; }
+.tw.t1 { width: 10px; height: 10px; right: -4px; top: 2px; }
+.tw.t2 { width: 8px; height: 8px; left: -3px; bottom: 6px; animation-delay: 0.5s; }
+.tw.t3 { width: 7px; height: 7px; right: 2px; bottom: -2px; animation-delay: 1s; }
+@keyframes twinkle {
+  0%, 100% { transform: scale(0) rotate(0); opacity: 0; }
+  50% { transform: scale(1) rotate(90deg); opacity: 1; }
 }
 
-.info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.sub {
-  font-size: 12px;
-  line-height: 1.3;
-  color: var(--sub);
-}
-.name {
-  font-size: 19px;
+/* ---------- text ---------- */
+#meta { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#label {
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.3;
-  color: var(--text);
+  letter-spacing: 0.04em;
+  color: var(--m-c2);
+  white-space: nowrap;
+}
+#name {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.amt {
-  flex-shrink: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
+#dots { display: flex; gap: 3px; margin-top: 3px; }
+#dots span {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  transition: width 0.45s cubic-bezier(0.2, 0.8, 0.3, 1), background-color 0.45s ease;
 }
-.amount {
-  font-size: 22px;
+#dots span.on { width: 16px; background: var(--m-c2); }
+
+#amt { position: relative; flex: 0 0 auto; display: flex; align-items: baseline; gap: 2px; }
+#amount {
+  font-size: 21px;
   font-weight: 700;
-  color: var(--text);
   font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, var(--m-c1), var(--m-c2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
-.baht {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--baht);
-}
+#baht { font-size: 12px; font-weight: 600; color: var(--sub); }
 
-#empty {
-  position: absolute;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  color: var(--sub);
-  font-size: 15px;
-  font-weight: 500;
-}
+/* ---------- rank transition ----------
+   phase-out: old rank lifts away · phase-pre: new rank parked below (no
+   transition) · phase-in: new rank rises in, staggered; badge flips like a coin. */
+.anim, #badge { will-change: transform, opacity; }
 
+#pill.phase-out .anim {
+  opacity: 0; transform: translateY(-10px); filter: blur(4px);
+  transition: opacity 0.3s ease, transform 0.35s ease-in, filter 0.3s ease;
+}
+#pill.phase-pre .anim {
+  opacity: 0; transform: translateY(14px); filter: blur(6px);
+  transition: none;
+}
+#pill.phase-in .anim {
+  opacity: 1; transform: none; filter: blur(0);
+  transition: opacity 0.5s ease, transform 0.65s cubic-bezier(0.2, 0.8, 0.3, 1), filter 0.5s ease;
+}
+#pill.phase-in .a1 { transition-delay: 80ms; }
+#pill.phase-in .a2 { transition-delay: 160ms; }
+#pill.phase-in .a3 { transition-delay: 240ms; }
+
+#pill.phase-out #badge {
+  opacity: 0; transform: rotateY(90deg) scale(0.8);
+  transition: transform 0.35s ease-in, opacity 0.3s ease;
+}
+#pill.phase-pre #badge {
+  opacity: 0; transform: rotateY(-90deg) scale(0.7);
+  transition: none;
+}
+#pill.phase-in #badge {
+  opacity: 1; transform: rotateY(0) scale(1);
+  transition: transform 0.75s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}

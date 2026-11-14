@@ -1,7 +1,10 @@
 const MAX_LINES = 20;
 const chatBox = document.getElementById("chat-box");
 
+// TTS settings, kept in sync with the server's tts-*-state broadcasts.
 let ttsEnabled = true;
+let ttsSpeed = 1.5;
+let ttsReadChance = 1;
 
 const SPAM_REPEAT_LIMIT = 3;
 const lastCommentByUser = new Map();
@@ -48,12 +51,6 @@ const STACKED_TONE_MARKS_PATTERN = /([่-๋])(?!\1)[่-๋]/;
 
 function isMalformedThai(text) {
   return MALFORMED_THAI_PATTERN.test(text || "") || STACKED_TONE_MARKS_PATTERN.test(text || "");
-}
-
-const SONG_COMMAND_PATTERN = /^\s*\/music(?:\s|$)/i;
-
-function isSongRequest(text) {
-  return SONG_COMMAND_PATTERN.test(text || "");
 }
 
 function collapseSpacedSingleChars(text) {
@@ -136,22 +133,36 @@ function celebrateGift() {
   });
 }
 
-function addChatLine(nickname, comment, avatarUrl) {
-  const { line, bubble } = buildLine("", "@" + nickname, avatarUrl, null);
+// TikTok and YouTube chat share this overlay; a small icon before the name
+// says which one a line came from -- a music note for TikTok, a play button
+// for YouTube. Drawn here as simple shapes, not the official logo files.
+const PLATFORM_ICONS = {
+  tiktok:
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1.5h2.3c.2 1.6 1.2 2.7 2.7 2.9v2.3c-1 0-1.9-.3-2.7-.8v4.6a3.9 3.9 0 1 1-3.9-3.9c.2 0 .4 0 .6.1v2.4a1.6 1.6 0 1 0 1 1.5z"/></svg>',
+  youtube:
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="0.5" y="3" width="15" height="10" rx="3"/><path class="play" d="M6.5 5.6v4.8L10.6 8z"/></svg>',
+};
+
+function platformIcon(platform) {
+  const key = platform === "youtube" ? "youtube" : "tiktok";
+  const icon = document.createElement("span");
+  icon.className = `platform-icon platform-${key}`;
+  icon.innerHTML = PLATFORM_ICONS[key];
+  return icon;
+}
+
+function addChatLine(nickname, comment, avatarUrl, platform) {
+  const { line, bubble } = buildLine("", "@" + nickname, avatarUrl, platformIcon(platform));
   line.querySelector(".nickname").textContent += " :";
   bubble.innerHTML = `<span class="comment">${escapeHtml(comment)}</span>`;
   pushLine(chatBox, line, MAX_LINES);
 }
 
-function addEmoteLine(nickname, emoteImages, avatarUrl) {
-  const { line, bubble } = buildLine("emote-line", "@" + nickname, avatarUrl, null);
+function addEmoteLine(nickname, emoteImages, avatarUrl, platform) {
+  const { line, bubble } = buildLine("emote-line", "@" + nickname, avatarUrl, platformIcon(platform));
   line.querySelector(".nickname").textContent += " :";
   for (const src of emoteImages) {
-    const img = document.createElement("img");
-    img.className = "emote-image";
-    img.src = src;
-    img.alt = "";
-    img.referrerPolicy = "no-referrer";
+    const img = createImg(src, "emote-image");
     img.onerror = () => {
       img.remove();
       if (!bubble.querySelector(".emote-image")) line.remove();
@@ -161,11 +172,10 @@ function addEmoteLine(nickname, emoteImages, avatarUrl) {
   pushLine(chatBox, line, MAX_LINES);
 }
 
-function addGiftLine(nickname, giftName, repeatCount, avatarUrl, giftImage) {
+function addGiftLine(nickname, giftName, repeatCount, avatarUrl) {
   const { line, bubble } = buildLine("gift-line", "@" + nickname, avatarUrl, null);
   const times = repeatCount > 1 ? ` <span class="gift-count">x${repeatCount}</span>` : "";
   bubble.innerHTML = `<span class="comment">ส่ง ${escapeHtml(giftName)}${times}</span>`;
-
   pushLine(chatBox, line, MAX_LINES);
 }
 
@@ -206,7 +216,7 @@ function handleWsMessage(data) {
   }
 
   if (data.type === "gift") {
-    addGiftLine(data.nickname, data.giftName, data.repeatCount, data.avatarUrl, data.giftImage);
+    addGiftLine(data.nickname, data.giftName, data.repeatCount, data.avatarUrl);
     celebrateGift();
     const times = data.repeatCount > 1 ? ` ${data.repeatCount} ชิ้น` : "";
     const gifterName = sanitizeNicknameForSpeech(data.nickname);
@@ -217,12 +227,12 @@ function handleWsMessage(data) {
   if (data.type === "member") return;
 
   if (data.type === "emote") {
-    addEmoteLine(data.nickname, data.emoteImages || [], data.avatarUrl);
+    addEmoteLine(data.nickname, data.emoteImages || [], data.avatarUrl, data.platform);
     return;
   }
 
   if (data.type !== "chat") return;
-  addChatLine(data.nickname, data.comment, data.avatarUrl);
+  addChatLine(data.nickname, data.comment, data.avatarUrl, data.platform);
   const userKey = data.user || data.nickname;
   const collapsedComment = collapseRepeatsForSpeech(data.comment);
   const skipReasons = [];
@@ -233,7 +243,7 @@ function handleWsMessage(data) {
   if (containsMathSymbolSpam(data.comment)) skipReasons.push("math-symbol-spam");
   if (isGibberishSpam(collapsedComment)) skipReasons.push("gibberish-spam");
   if (isAlphanumericGibberish(data.comment)) skipReasons.push("alphanumeric-gibberish");
-  if (isSongRequest(data.comment)) skipReasons.push("song-request");
+  if (data.isSongRequest) skipReasons.push("song-request");
   // Rolled last so the log only blames chance for Comments that would
   // otherwise have been read.
   if (!skipReasons.length && Math.random() >= ttsReadChance) skipReasons.push("read-chance");
@@ -246,8 +256,6 @@ function handleWsMessage(data) {
 
 const TTS_CHUNK_LIMIT = 200;
 const TTS_VOLUME = 0.4;
-let ttsSpeed = 1.5;
-let ttsReadChance = 1;
 const speakQueue = [];
 let isSpeaking = false;
 let currentAudio = null;
@@ -332,7 +340,7 @@ function playChunks(chunks, i, onDone) {
   };
   audio.onended = next;
   audio.onerror = () => {
-    console.warn("Google TTS โหลดเสียงไม่สำเร็จ ข้ามท่อนนี้ไป:", chunks[i]);
+    console.warn("TTS โหลดเสียงไม่สำเร็จ ข้ามท่อนนี้ไป:", chunks[i]);
     next();
   };
   audio.play().catch((err) => {

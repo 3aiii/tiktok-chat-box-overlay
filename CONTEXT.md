@@ -87,6 +87,13 @@ the top gifter by diamonds, accumulated in-memory since the server started. Show
 clicks "แสดงสรุป" in the panel; there is no auto-display and no persistence across a server restart.
 _Avoid_: Stream stats, analytics
 
+**Gift history**:
+Every TikTok Gift appended to `logs/gifts-YYYY-MM-DD.jsonl` (one file per local day) as it is broadcast,
+read back by `/gifts` through `/api/gift-events` to chart today / yesterday / 7 / 30 days. Unlike
+Session stats summary it survives a server restart, by the streamer's choice (2026-11-14). Mock Gifts
+(`MOCK=1`) go to `logs/mock-gifts/` instead, never the real history.
+_Avoid_: Gift log, donation history (Donation is EasyDonate)
+
 **BRB Timer**:
 A break countdown shown on its own overlay (`/timer`) and controlled from the panel: preset or custom
 duration, start/pause/resume/reset, and a custom message. Server holds the single source of truth
@@ -114,6 +121,12 @@ same link check and approval as any other Song request, and differs only in who 
 playing it doesn't consume it. The distinction is about *who asked and whether it repeats*, never about
 a second way into the stream's audio.
 _Avoid_: Playlist, fallback playlist, backup track, default song
+
+**Now playing (YT Music)**:
+The track the streamer is playing for themselves in their own music.youtube.com tab, shown on `/ytmusic`
+with what's queued after it. Read from that tab by a userscript; the overlay never plays it. Unrelated to
+Song requests: viewers can't add to it, and its queue is YouTube Music's, not the Song request queue.
+_Avoid_: Playlist, song queue
 
 ## Relationships
 

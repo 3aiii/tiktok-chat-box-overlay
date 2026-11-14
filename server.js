@@ -6,6 +6,7 @@ const https = require('https');
 const path = require('path');
 const fs = require('fs');
 const { URL } = require('url');
+const { startYouTubeChat } = require('./youtube-chat');
 
 const TIKTOK_USERNAME = process.env.TIKTOK_USERNAME || 'your_tiktok_username';
 const WS_PORT = process.env.WS_PORT || 8081;
@@ -14,27 +15,23 @@ const MOCK_MODE = process.env.MOCK === '1';
 const EASYDONATE_API_KEY = process.env.EASYDONATE_API_KEY || '';
 
 // Self-hosted TTS engine (tts-engine-project, POST /v1/tts, {text, lang} ->
-// streamed WAV). Switchable at runtime against the older Google proxy from
-// the panel widget -- see ttsProvider below and the /tts route.
+// streamed WAV). Switchable at runtime against the older Google proxy -- see
+// ttsProvider below and the /tts route.
 const TTS_ENGINE_URL = process.env.TTS_ENGINE_URL || 'http://127.0.0.1:8000/v1/tts';
 
-// In-memory only, resets to 'google' on server restart -- same convention as
-// timerState below. Switched via the panel's TTS provider control.
+// TTS settings below are in-memory only (they reset on restart), changed from
+// the Control Room or the Panel and broadcast to every page over WS.
 let ttsProvider = 'google'; // 'local' | 'google'
 
-// Global on/off for reading chat aloud, in-memory only (resets to true on
-// restart). Was a per-browser localStorage toggle button on chat.html itself;
-// moved here + broadcast over WS so it can be controlled from the Setup page
-// instead, same pattern as ttsProvider above.
+// Global on/off for reading chat aloud.
 let ttsEnabled = true;
 
-// TTS playback speed (1.0 = normal, >1 = faster, <1 = slower), same
-// in-memory/broadcast convention as ttsProvider and ttsEnabled above.
+// Playback rate: 1.0 = normal, >1 faster, <1 slower.
 let ttsSpeed = 1.5;
 
 // Fraction of Comments (0..1) that TTS reads aloud after the skip filters;
 // the rest are only shown. Lets a busy chat be read "sometimes" instead of
-// queueing every line. Same in-memory/broadcast convention as above.
+// queueing every line.
 let ttsReadChance = 1;
 
 // Whether the server currently has a live TikTok room connection (real mode)
@@ -59,6 +56,23 @@ function tiktokConnectionPayload(detailOverride) {
         : undefined);
   }
   return payload;
+}
+
+// YouTube live chat is optional: off unless one of these is set in .env (see
+// youtube-chat.js). Its connection state is tracked apart from TikTok's so
+// one platform dropping doesn't mark the other offline.
+const YOUTUBE_CHANNEL = (process.env.YOUTUBE_CHANNEL || '').trim();
+const YOUTUBE_VIDEO_ID = (process.env.YOUTUBE_VIDEO_ID || '').trim();
+const YOUTUBE_ENABLED = Boolean(YOUTUBE_CHANNEL || YOUTUBE_VIDEO_ID);
+// MOCK_CHAT fakes YouTube chat too (see the mock block below), so the panel
+// shows a "connected" YouTube badge for it instead of a real connection.
+const YOUTUBE_MOCKED = MOCK_MODE && process.env.MOCK_CHAT === '1' && !YOUTUBE_ENABLED;
+let youtubeState = YOUTUBE_MOCKED
+  ? { connected: true, detail: 'MOCK: แชท YouTube ปลอม' }
+  : { connected: false, detail: 'กำลังเชื่อมต่อ YouTube…' };
+
+function youtubeConnectionPayload() {
+  return { type: 'youtube-connection-state', enabled: YOUTUBE_ENABLED || YOUTUBE_MOCKED, ...youtubeState };
 }
 
 // Proxies Google Translate's TTS endpoint so the chat widget can fetch audio
@@ -174,15 +188,6 @@ const MOCK_LEADERBOARD = [
 // this streamer's own donor data, not something to ship in source control.
 const EXTRA_DONORS_FILE = process.env.EXTRA_DONORS_FILE || path.join(__dirname, 'extra-donors.json');
 
-function loadExtraDonors() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(EXTRA_DONORS_FILE, 'utf8'));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 // Spellings of one donor's name that should count as a single entry, e.g.
 // { "Chi": "ชิ" } folds "Chi" into "ชิ". Matched case-insensitively. Gitignored
 // for the same reason as extra-donors.json.
@@ -204,7 +209,7 @@ function loadDonorAliases() {
 function withExtraEntry(list) {
   const aliases = loadDonorAliases();
   const merged = new Map();
-  for (const entry of [...list, ...loadExtraDonors()]) {
+  for (const entry of [...list, ...readJsonArray(EXTRA_DONORS_FILE)]) {
     const name = aliases.get(String(entry.name).trim().toLowerCase()) || String(entry.name).trim();
     // Case-insensitive key so "skyfall" and "Skyfall" sum into one entry,
     // shown with whichever spelling came first (the higher API amount).
@@ -217,6 +222,40 @@ function withExtraEntry(list) {
     }
   }
   return [...merged.values()].sort((a, b) => b.amount - a.amount);
+}
+
+// A JSON array from a hand-edited file, or [] if it's missing or broken.
+function readJsonArray(file) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// GET a URL and parse the JSON body; rejects on a non-200 status, a network
+// error, or no response within 10s (a stalled API shouldn't hang the request).
+function getJson(url, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers, timeout: 10000 }, (apiRes) => {
+      let body = '';
+      apiRes.on('data', (chunk) => (body += chunk));
+      apiRes.on('end', () => {
+        if (apiRes.statusCode !== 200) {
+          reject(new Error(`${new URL(url).host} returned ${apiRes.statusCode}: ${body.slice(0, 200)}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch (err) {
+          reject(new Error(`${new URL(url).host} parse error: ${err.message}`));
+        }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error(`${new URL(url).host} timed out`)));
+    req.on('error', reject);
+  });
 }
 
 function sendJson(res, statusCode, data) {
@@ -235,7 +274,7 @@ const stats = {
   gifters: new Map(),
 };
 
-// Called from broadcast() so every chat/gift/member path -- mock and real
+// Called from emitLiveEvent() so every chat/gift/member path -- mock and real
 // alike -- updates the same counters without each call site remembering to.
 function trackStats(message) {
   if (message.type === 'chat' || message.type === 'emote') {
@@ -364,30 +403,11 @@ function parseIsoDuration(iso) {
 // black rectangle mid-live with nothing explaining why. Checking here means a
 // bad link is refused at request time instead of surfacing 40 minutes later.
 function fetchVideoDetails(videoId) {
-  return new Promise((resolve, reject) => {
-    const url =
-      'https://www.googleapis.com/youtube/v3/videos' +
+  return getJson(
+    'https://www.googleapis.com/youtube/v3/videos' +
       `?part=snippet,contentDetails,status&id=${encodeURIComponent(videoId)}` +
-      `&key=${encodeURIComponent(YOUTUBE_API_KEY)}`;
-
-    https
-      .get(url, (apiRes) => {
-        let body = '';
-        apiRes.on('data', (chunk) => (body += chunk));
-        apiRes.on('end', () => {
-          if (apiRes.statusCode !== 200) {
-            reject(new Error(`YouTube API ${apiRes.statusCode}: ${body.slice(0, 200)}`));
-            return;
-          }
-          try {
-            resolve(JSON.parse(body));
-          } catch (err) {
-            reject(err);
-          }
-        });
-      })
-      .on('error', reject);
-  });
+      `&key=${encodeURIComponent(YOUTUBE_API_KEY)}`,
+  );
 }
 
 // Returns { ok: true, song } or { ok: false, reason }. The reason is for the
@@ -409,11 +429,10 @@ async function validateVideo(videoId) {
     return { ok: false, reason: `ยาวเกิน ${Math.round(SONG_MAX_DURATION_SEC / 60)} นาที` };
   }
 
-  const restriction = item.contentDetails && item.contentDetails.regionRestriction;
-  if (restriction && restriction.blocked && restriction.blocked.includes(YOUTUBE_REGION)) {
-    return { ok: false, reason: `เล่นไม่ได้ในภูมิภาค ${YOUTUBE_REGION}` };
-  }
-  if (restriction && restriction.allowed && !restriction.allowed.includes(YOUTUBE_REGION)) {
+  const restriction = (item.contentDetails && item.contentDetails.regionRestriction) || {};
+  const blockedHere = restriction.blocked && restriction.blocked.includes(YOUTUBE_REGION);
+  const notAllowedHere = restriction.allowed && !restriction.allowed.includes(YOUTUBE_REGION);
+  if (blockedHere || notAllowedHere) {
     return { ok: false, reason: `เล่นไม่ได้ในภูมิภาค ${YOUTUBE_REGION}` };
   }
 
@@ -431,16 +450,7 @@ async function validateVideo(videoId) {
 // Filler songs are the one piece of song state written to disk. A viewer
 // request is worth minutes and is trivially re-made; a Filler song is something
 // the streamer curated and would resent rebuilding every stream.
-function loadFillerSongs() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(FILLER_SONGS_FILE, 'utf8'));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-let fillerSongs = loadFillerSongs();
+let fillerSongs = readJsonArray(FILLER_SONGS_FILE);
 
 function saveFillerSongs() {
   fs.writeFile(FILLER_SONGS_FILE, JSON.stringify(fillerSongs, null, 2), (err) => {
@@ -474,7 +484,6 @@ function songStatePayload() {
     approved: songState.approved,
     nowPlaying: songState.nowPlaying,
     fillers: fillerSongs,
-    maxDurationSec: SONG_MAX_DURATION_SEC,
   };
 }
 
@@ -584,42 +593,36 @@ async function addFillerSong(link) {
 // which withExtraEntry then merges by name/alias.
 const DONATIONS_PAGE_SIZE = 100;
 
-function easyDonateGet(apiPath) {
-  return new Promise((resolve, reject) => {
-    https
-      .get(
-        `${EASYDONATE_API_BASE_URL}${apiPath}`,
-        { headers: { Authorization: `Bearer ${EASYDONATE_API_KEY}` } },
-        (apiRes) => {
-          let body = '';
-          apiRes.on('data', (chunk) => (body += chunk));
-          apiRes.on('end', () => {
-            if (apiRes.statusCode !== 200) {
-              reject(new Error(`EasyDonate ${apiPath} returned ${apiRes.statusCode}: ${body}`));
-              return;
-            }
-            try {
-              resolve(JSON.parse(body));
-            } catch (err) {
-              reject(new Error(`EasyDonate ${apiPath} parse error: ${err.message}`));
-            }
-          });
-        }
-      )
-      .on('error', reject);
-  });
-}
-
 async function fetchDonationTotals() {
   const donations = [];
   for (let page = 1, totalPage = 1; page <= totalPage; page++) {
-    const { data } = await easyDonateGet(`/api/v1/donations?size=${DONATIONS_PAGE_SIZE}&page=${page}`);
+    const { data } = await getJson(
+      `${EASYDONATE_API_BASE_URL}/api/v1/donations?size=${DONATIONS_PAGE_SIZE}&page=${page}`,
+      { Authorization: `Bearer ${EASYDONATE_API_KEY}` },
+    );
     totalPage = data?.totalPage || 1;
     donations.push(...(data?.histories || []));
   }
   return donations
     .filter((donation) => donation.status === 'SUCCESS')
     .map((donation) => ({ name: donation.donatorName || 'ไม่ระบุชื่อ', amount: Number(donation.amount) || 0 }));
+}
+
+// Every open /top-donate source polls every 15s and each poll pages through
+// the whole donation history, so they share one fetch for a short while
+// instead of each walking EasyDonate on its own.
+const DONATIONS_CACHE_MS = 15000;
+let donationsCache = { at: 0, promise: null };
+
+function cachedDonationTotals() {
+  if (!donationsCache.promise || Date.now() - donationsCache.at > DONATIONS_CACHE_MS) {
+    const promise = fetchDonationTotals();
+    donationsCache = { at: Date.now(), promise };
+    promise.catch(() => {
+      if (donationsCache.promise === promise) donationsCache = { at: 0, promise: null }; // retry next poll
+    });
+  }
+  return donationsCache.promise;
 }
 
 async function handleLeaderboard(req, res) {
@@ -629,7 +632,7 @@ async function handleLeaderboard(req, res) {
   }
 
   try {
-    const leaderboard = withExtraEntry(await fetchDonationTotals());
+    const leaderboard = withExtraEntry(await cachedDonationTotals());
     sendJson(res, 200, { leaderboard, mock: false });
   } catch (err) {
     console.error('EasyDonate leaderboard error:', err.message);
@@ -637,13 +640,192 @@ async function handleLeaderboard(req, res) {
   }
 }
 
-// Serves each overlay widget's page (see PAGE_ROUTES below) plus static
-// assets, so each one can be added as its own Browser Source in OBS/Streamlabs
+// YouTube Music now-playing, pushed by the ytmusic.user.js userscript running
+// in the streamer's music.youtube.com tab (POST /api/ytmusic) and relayed to
+// the /ytmusic widget. In-memory only; the tab re-sends every few seconds, so
+// there's nothing worth keeping across a restart.
+// Long on purpose: Chrome throttles a background tab's timers to about once a
+// minute, so a paused, hidden YT Music tab may only check in that often. A
+// tab that's actually closed says so itself ({ closed: true }), so this only
+// matters for one that crashed.
+const YTMUSIC_STALE_MS = 120000;
+const YTMUSIC_MAX_BODY = 64 * 1024;
+const YTMUSIC_MAX_QUEUE = 20;
+let ytMusicState = { active: false, track: null, paused: true, positionSec: 0, durationSec: 0, queue: [], receivedAt: 0 };
+
+function ytMusicStatePayload() {
+  return { type: 'ytmusic-state', ...ytMusicState };
+}
+
+// The userscript is ours, but the endpoint is open to anything on the
+// machine, so only known fields of the expected shape get through.
+function cleanYtMusicString(value, max = 300) {
+  return typeof value === 'string' ? value.slice(0, max) : '';
+}
+
+function cleanYtMusicNumber(value) {
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function handleYtMusicUpdate(req, res) {
+  if (req.method !== 'POST') {
+    res.writeHead(405);
+    res.end('Method not allowed');
+    return;
+  }
+  let body = '';
+  let tooLarge = false;
+  req.on('data', (chunk) => {
+    body += chunk;
+    if (body.length > YTMUSIC_MAX_BODY) {
+      tooLarge = true;
+      req.destroy();
+    }
+  });
+  req.on('end', () => {
+    if (tooLarge) return;
+    let data;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      res.writeHead(400);
+      res.end('Invalid JSON');
+      return;
+    }
+    if (!data || typeof data !== 'object') {
+      res.writeHead(400);
+      res.end('Expected a JSON object');
+      return;
+    }
+    if (data.closed === true) {
+      ytMusicState = { ...ytMusicState, active: false };
+      broadcast(ytMusicStatePayload());
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    const track = data.track && typeof data.track === 'object' && data.track.title
+      ? {
+          title: cleanYtMusicString(data.track.title),
+          artist: cleanYtMusicString(data.track.artist),
+          album: cleanYtMusicString(data.track.album),
+          artwork: cleanYtMusicString(data.track.artwork, 1000),
+        }
+      : null;
+    const queue = Array.isArray(data.queue)
+      ? data.queue.slice(0, YTMUSIC_MAX_QUEUE).filter((item) => item && item.title).map((item) => ({
+          title: cleanYtMusicString(item.title),
+          artist: cleanYtMusicString(item.artist),
+          duration: cleanYtMusicString(item.duration, 20),
+          artwork: cleanYtMusicString(item.artwork, 1000),
+        }))
+      : [];
+    ytMusicState = {
+      active: true,
+      track,
+      paused: Boolean(data.paused),
+      positionSec: cleanYtMusicNumber(data.positionSec),
+      durationSec: cleanYtMusicNumber(data.durationSec),
+      queue,
+      // Stamped here rather than trusting the tab's clock; widgets extrapolate
+      // the progress bar from it between updates.
+      receivedAt: Date.now(),
+    };
+    broadcast(ytMusicStatePayload());
+    res.writeHead(204);
+    res.end();
+  });
+}
+
+// The tab can't announce its own closing reliably, so silence is the signal.
+setInterval(() => {
+  if (ytMusicState.active && Date.now() - ytMusicState.receivedAt > YTMUSIC_STALE_MS) {
+    ytMusicState = { ...ytMusicState, active: false };
+    broadcast(ytMusicStatePayload());
+  }
+}, 5000);
+
+// Each widget lives at its own path so it can be added as a separate Browser
+// Source in OBS/Streamlabs and positioned independently.
+const PAGE_ROUTES = {
+  '/': 'index.html',
+  '/chat': 'widgets/chat/chat.html',
+  '/pinned': 'widgets/pinned/pinned.html',
+  '/panel': 'widgets/panel/panel.html',
+  '/top-donate': 'widgets/top-donate/top-donate.html',
+  '/summary': 'widgets/summary/summary.html',
+  '/gifts': 'widgets/gifts/gifts.html',
+  '/timer': 'widgets/timer/timer.html',
+  '/music': 'widgets/music/music.html',
+  '/follow': 'widgets/follow/follow.html',
+  '/ytmusic': 'widgets/ytmusic/ytmusic.html',
+};
+
+// Widget files (html/css/js under widgets/) and the bundled fonts, served
+// locally so overlays work offline and Thai renders without system fonts.
+const STATIC_ROOTS = {
+  '/widgets/': path.join(__dirname, 'widgets'),
+  '/fonts/': path.join(__dirname, 'fonts'),
+};
+const CONFETTI_FILE = path.join(__dirname, 'node_modules', 'canvas-confetti', 'dist', 'confetti.browser.js');
+
+const CONTENT_TYPES = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.ttf': 'font/ttf',
+  '.woff2': 'font/woff2',
+};
+
+function serveFile(res, filePath) {
+  const contentType = CONTENT_TYPES[path.extname(filePath)];
+  if (!contentType) {
+    res.writeHead(404);
+    res.end('Not found');
+    return;
+  }
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(data);
+  });
+}
+
 const httpServer = http.createServer((req, res) => {
   const reqUrl = new URL(req.url, `http://localhost:${HTTP_PORT}`);
 
+  if (reqUrl.pathname === '/api/gift-events') {
+    handleGiftEvents(reqUrl, res);
+    return;
+  }
+
   if (reqUrl.pathname === '/api/leaderboard') {
     handleLeaderboard(req, res);
+    return;
+  }
+
+  if (reqUrl.pathname === '/api/ytmusic') {
+    handleYtMusicUpdate(req, res);
+    return;
+  }
+
+  // Served at a top-level *.user.js URL so opening it in a browser with
+  // Tampermonkey brings up the install prompt; the port is patched in so the
+  // installed script talks to this server even when HTTP_PORT isn't 8080.
+  if (reqUrl.pathname === '/ytmusic.user.js') {
+    fs.readFile(path.join(__dirname, 'widgets', 'ytmusic', 'ytmusic.user.js'), 'utf8', (err, source) => {
+      if (err) {
+        res.writeHead(500);
+        res.end('Failed to load userscript');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+      res.end(source.replace('"http://localhost:8080"', JSON.stringify(`http://localhost:${HTTP_PORT}`)));
+    });
     return;
   }
 
@@ -662,102 +844,32 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  // Serve the bundled Kanit font files so the overlay renders Thai text
-  // consistently without depending on system fonts.
-  if (reqUrl.pathname.startsWith('/fonts/') && reqUrl.pathname.endsWith('.ttf')) {
-    const fontFile = path.basename(reqUrl.pathname);
-    const fontPath = path.join(__dirname, 'fonts', fontFile);
-    fs.readFile(fontPath, (err, data) => {
-      if (err) {
-        res.writeHead(404);
-        res.end('Font not found');
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': 'font/ttf' });
-      res.end(data);
-    });
-    return;
-  }
-
-  // Serve canvas-confetti from node_modules instead of a CDN so the overlay
-  // works fully offline / without external requests.
   if (reqUrl.pathname === '/vendor/confetti.js') {
-    const confettiPath = path.join(__dirname, 'node_modules', 'canvas-confetti', 'dist', 'confetti.browser.js');
-    fs.readFile(confettiPath, (err, data) => {
-      if (err) {
-        res.writeHead(500);
-        res.end('Failed to load confetti.js');
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': 'application/javascript' });
-      res.end(data);
-    });
+    serveFile(res, CONFETTI_FILE);
     return;
   }
 
-  // Generic static serve for the split widget files. Each widget lives in its
-  // own folder (widgets/chat/chat.html, chat.css, chat.js, ...) alongside a
-  // shared/ folder for code common to all of them, so this resolves the full
-  // path under widgets/ rather than just the basename.
-  const WIDGET_CONTENT_TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css' };
-  if (reqUrl.pathname.startsWith('/widgets/')) {
-    const ext = path.extname(reqUrl.pathname);
-    const contentType = WIDGET_CONTENT_TYPES[ext];
-    if (!contentType) {
-      res.writeHead(404);
-      res.end('Not found');
-      return;
-    }
-    // path.join collapses ".." segments, and this check rejects anything
-    // that still climbs outside widgets/ afterwards -- prevents requests
-    // like /widgets/../server.js from escaping the widgets folder.
-    const widgetsRoot = path.join(__dirname, 'widgets');
-    const widgetPath = path.join(widgetsRoot, decodeURIComponent(reqUrl.pathname.slice('/widgets/'.length)));
-    if (!widgetPath.startsWith(widgetsRoot + path.sep)) {
+  for (const [prefix, root] of Object.entries(STATIC_ROOTS)) {
+    if (!reqUrl.pathname.startsWith(prefix)) continue;
+    // path.join collapses ".." segments; anything that still lands outside
+    // the root (e.g. /widgets/../server.js) is refused.
+    const filePath = path.join(root, decodeURIComponent(reqUrl.pathname.slice(prefix.length)));
+    if (!filePath.startsWith(root + path.sep)) {
       res.writeHead(403);
       res.end('Forbidden');
       return;
     }
-    fs.readFile(widgetPath, (err, data) => {
-      if (err) {
-        res.writeHead(404);
-        res.end('Widget file not found');
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': contentType });
-      res.end(data);
-    });
+    serveFile(res, filePath);
     return;
   }
 
-  // Each split overlay widget lives at its own path so it can be added as a
-  // separate Browser Source in OBS/Streamlabs and scaled/positioned independently.
-  const PAGE_ROUTES = {
-    '/': 'index.html',
-    '/chat': 'widgets/chat/chat.html',
-    '/pinned': 'widgets/pinned/pinned.html',
-    '/panel': 'widgets/panel/panel.html',
-    '/top-donate': 'widgets/top-donate/top-donate.html',
-    '/summary': 'widgets/summary/summary.html',
-    '/timer': 'widgets/timer/timer.html',
-    '/music': 'widgets/music/music.html',
-    '/follow': 'widgets/follow/follow.html',
-  };
   const page = PAGE_ROUTES[reqUrl.pathname];
-  if (!page) {
-    res.writeHead(404);
-    res.end('Not found');
+  if (page) {
+    serveFile(res, path.join(__dirname, page));
     return;
   }
-  fs.readFile(path.join(__dirname, page), (err, data) => {
-    if (err) {
-      res.writeHead(500);
-      res.end('Failed to load page');
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(data);
-  });
+  res.writeHead(404);
+  res.end('Not found');
 });
 httpServer.listen(HTTP_PORT, () => {
   console.log(`Overlay page: http://localhost:${HTTP_PORT}`);
@@ -766,6 +878,85 @@ httpServer.listen(HTTP_PORT, () => {
 // Broadcast chat events to any connected overlay pages
 const wss = new WebSocketServer({ port: WS_PORT });
 console.log(`WebSocket server listening on ws://localhost:${WS_PORT}`);
+
+// Gift history: every Gift appended to logs/gifts-YYYY-MM-DD.jsonl (local
+// date), unlike the in-memory session `stats`, so /gifts can show today /
+// yesterday / 7 / 30 days and survives a server restart. One file per day
+// keeps a range read to the handful of files it actually covers. MOCK=1 uses
+// its own folder (seeded by `npm run seed:gifts`) so fake Gifts never mix
+// into the real history.
+const GIFT_LOG_DIR = path.join(__dirname, 'logs', MOCK_MODE ? 'mock-gifts' : '');
+fs.mkdirSync(GIFT_LOG_DIR, { recursive: true });
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Local date, not UTC, so one evening's stream lands in one file.
+function localDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function giftLogFile(date) {
+  return path.join(GIFT_LOG_DIR, `gifts-${localDateKey(date)}.jsonl`);
+}
+
+function recordGift(message) {
+  const now = new Date();
+  const entry = {
+    t: now.getTime(),
+    user: message.user,
+    nickname: message.nickname,
+    avatarUrl: message.avatarUrl || '',
+    giftName: message.giftName,
+    giftImage: message.giftImage || '',
+    repeatCount: message.repeatCount || 1,
+    diamondCount: message.diamondCount || 0,
+  };
+  fs.appendFile(giftLogFile(now), JSON.stringify(entry) + '\n', (err) => {
+    if (err) console.error('[gift-log] write failed:', err.message);
+  });
+}
+
+// One day's gifts; a missing file just means no gifts that day, and a
+// half-written last line (a crash mid-append) is skipped.
+async function readGiftDay(date) {
+  let text;
+  try {
+    text = await fs.promises.readFile(giftLogFile(date), 'utf8');
+  } catch {
+    return [];
+  }
+  const events = [];
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    try {
+      events.push(JSON.parse(line));
+    } catch {
+      // skip it
+    }
+  }
+  return events;
+}
+
+// GET /api/gift-events?from=<ms>&to=<ms> -- raw events in [from, to); the
+// page does the aggregating (per hour/day, per gift type, per gifter).
+// Capped at 31 days so a bad query can't read the whole folder.
+async function handleGiftEvents(reqUrl, res) {
+  const to = Number(reqUrl.searchParams.get('to')) || Date.now();
+  const from = Number(reqUrl.searchParams.get('from')) || to - DAY_MS;
+  if (from >= to || to - from > 31 * DAY_MS) {
+    sendJson(res, 400, { error: 'invalid range' });
+    return;
+  }
+  const days = [];
+  const day = new Date(from);
+  day.setHours(0, 0, 0, 0);
+  while (day.getTime() < to) {
+    days.push(new Date(day));
+    day.setDate(day.getDate() + 1);
+  }
+  const events = (await Promise.all(days.map(readGiftDay))).flat().filter((e) => e.t >= from && e.t < to);
+  sendJson(res, 200, { events });
+}
 
 // Live log: one JSON object per line in logs/live-YYYY-MM-DD.jsonl, written
 // for the whole session so a "my comment never showed up" report can be
@@ -781,8 +972,7 @@ let liveLogDate = null;
 
 function liveLog(stage, data) {
   const now = new Date();
-  // Local date, not UTC, so one evening's stream lands in one file.
-  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const date = localDateKey(now);
   try {
     if (date !== liveLogDate) {
       if (liveLogStream) liveLogStream.end();
@@ -797,36 +987,46 @@ function liveLog(stage, data) {
   }
 }
 
-// Only these reach the log from broadcast(); state syncs (timer, songs, tts
-// settings) are resent constantly and say nothing about missing comments.
-const LOGGED_BROADCAST_TYPES = new Set(['chat', 'emote', 'gift']);
-let nextLogId = 1;
-
+// Sends to every connected page; returns how many got it.
 function broadcast(payload) {
-  trackStats(payload);
-  let delivered = 0;
-  if (LOGGED_BROADCAST_TYPES.has(payload.type)) {
-    payload = { ...payload, logId: nextLogId++ };
-  }
   const message = JSON.stringify(payload);
+  let delivered = 0;
   wss.clients.forEach((client) => {
     if (client.readyState === client.OPEN) {
       client.send(message);
       delivered++;
     }
   });
-  if (payload.logId) {
-    liveLog('broadcast', {
-      logId: payload.logId,
-      type: payload.type,
-      user: payload.user,
-      nickname: payload.nickname,
-      comment: payload.comment,
-      giftName: payload.giftName,
-      emoteCount: payload.emoteImages?.length,
-      clients: delivered,
-    });
+  return delivered;
+}
+
+// Only these get a logId and a live-log line -- the ones a "my comment never
+// showed up" report is about. Joins and follows are too frequent to be worth it.
+const LOGGED_EVENT_TYPES = new Set(['chat', 'emote', 'gift']);
+let nextLogId = 1;
+
+// Something a viewer did (chat, emote, gift, member join, follow), from TikTok,
+// YouTube or mock alike. Counts it, records Gifts, then sends it out. State
+// syncs (timer, songs, TTS settings) skip this and call broadcast() directly.
+function emitLiveEvent(event) {
+  trackStats(event);
+  if (event.type === 'gift') recordGift(event);
+  if (!LOGGED_EVENT_TYPES.has(event.type)) {
+    broadcast(event);
+    return;
   }
+  const logged = { ...event, logId: nextLogId++ };
+  const delivered = broadcast(logged);
+  liveLog('broadcast', {
+    logId: logged.logId,
+    type: logged.type,
+    user: logged.user,
+    nickname: logged.nickname,
+    comment: logged.comment,
+    giftName: logged.giftName,
+    emoteCount: logged.emoteImages?.length,
+    clients: delivered,
+  });
 }
 
 // In-memory only, same as `stats` -- resets on server restart. `endsAt` (not
@@ -856,8 +1056,23 @@ setInterval(() => {
   }
 }, 250);
 
-// The panel widget sends messages upstream: pin/unpin a comment, request the
-// current session stats snapshot to show on /summary, or control the BRB timer.
+// Everything a page needs to show the current state, resent to each page as
+// it connects -- otherwise reloading /timer mid-countdown (or opening /panel
+// late) would show defaults until the next change.
+const STATE_PAYLOADS = [
+  timerStatePayload,
+  () => ({ type: 'tts-provider-state', provider: ttsProvider }),
+  () => ({ type: 'tts-enabled-state', enabled: ttsEnabled }),
+  () => ({ type: 'tts-speed-state', speed: ttsSpeed }),
+  () => ({ type: 'tts-read-chance-state', chance: ttsReadChance }),
+  tiktokConnectionPayload,
+  youtubeConnectionPayload,
+  songStatePayload,
+  ytMusicStatePayload,
+];
+
+// Pages send commands upstream: pin/unpin, show the summary, the BRB timer,
+// song requests and fillers, TTS settings, and overlay-log reports.
 let nextClientId = 1;
 
 wss.on('connection', (ws) => {
@@ -865,16 +1080,7 @@ wss.on('connection', (ws) => {
   liveLog('ws-client', { clientId, event: 'connected', total: wss.clients.size });
   ws.on('close', () => liveLog('ws-client', { clientId, event: 'closed', total: wss.clients.size }));
 
-  // Sync-on-connect: without this, reloading /timer mid-countdown (or opening
-  // /panel late) would show idle/zero until the next control action instead
-  // of picking up wherever the countdown actually is.
-  ws.send(JSON.stringify(timerStatePayload()));
-  ws.send(JSON.stringify({ type: 'tts-provider-state', provider: ttsProvider }));
-  ws.send(JSON.stringify({ type: 'tts-enabled-state', enabled: ttsEnabled }));
-  ws.send(JSON.stringify({ type: 'tts-speed-state', speed: ttsSpeed }));
-  ws.send(JSON.stringify({ type: 'tts-read-chance-state', chance: ttsReadChance }));
-  ws.send(JSON.stringify(tiktokConnectionPayload()));
-  ws.send(JSON.stringify(songStatePayload()));
+  STATE_PAYLOADS.forEach((payload) => ws.send(JSON.stringify(payload())));
 
   ws.on('message', (raw) => {
     let message;
@@ -1006,6 +1212,36 @@ wss.on('connection', (ws) => {
   });
 });
 
+// Every Comment, from either platform, goes through here so the profanity
+// filter, chat overlay, TTS and song requests treat TikTok and YouTube alike.
+function handleIncomingComment(message) {
+  if (isProfaneComment(message.comment)) {
+    liveLog('filtered', { reason: 'profanity', platform: message.platform, user: message.user, content: message.comment });
+    console.log(`[filtered] ${message.nickname}: ${message.comment}`);
+    return;
+  }
+  console.log(`${message.platform === 'youtube' ? '[yt] ' : ''}${message.nickname}: ${message.comment}`);
+  // A Song request is a Comment first and stays one -- it is shown like any
+  // other, and only *additionally* considered for the queue. The flag tells
+  // the chat overlay not to read the link aloud.
+  emitLiveEvent({ ...message, isSongRequest: SONG_COMMAND.test(message.comment || '') });
+  handleSongRequestComment(message.user, message.nickname, message.comment);
+}
+
+if (YOUTUBE_ENABLED) {
+  startYouTubeChat({
+    channel: YOUTUBE_CHANNEL,
+    videoId: YOUTUBE_VIDEO_ID,
+    onMessage: handleIncomingComment,
+    onState: (connected, detail) => {
+      if (connected !== youtubeState.connected) console.log(`[yt] ${detail}`);
+      youtubeState = { connected, detail };
+      broadcast(youtubeConnectionPayload());
+    },
+    log: liveLog,
+  });
+}
+
 if (MOCK_MODE) {
   console.log(`MOCK mode: generating fake follows${process.env.MOCK_CHAT === '1' ? ' and chat traffic' : ''} instead of connecting to TikTok.`);
 
@@ -1034,30 +1270,49 @@ if (MOCK_MODE) {
     'เล่นเก',
   ];
 
+  const randomItem = (list) => list[Math.floor(Math.random() * list.length)];
   const mockAvatar = (nickname) => `https://i.pravatar.cc/150?u=${encodeURIComponent(nickname)}`;
+  const mockViewer = (nickname) => ({ platform: 'tiktok', user: nickname, nickname, avatarUrl: mockAvatar(nickname) });
 
   const mockGifts = [
-    { name: 'Rose', image: 'https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/968820bc85e274713c795a6aef3f7c67~tplv-obj.png' },
-    { name: 'Ice Cream Cone', image: 'https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/968820bc85e274713c795a6aef3f7c67~tplv-obj.png' },
-    { name: 'Glow Stick', image: '' },
+    { name: 'Rose', diamonds: 1, image: 'https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/968820bc85e274713c795a6aef3f7c67~tplv-obj.png' },
+    { name: 'Ice Cream Cone', diamonds: 1, image: '' },
+    { name: 'Glow Stick', diamonds: 1, image: '' },
+    { name: 'Finger Heart', diamonds: 5, image: '' },
+    { name: 'Doughnut', diamonds: 30, image: '' },
   ];
 
   // Chat-overlay traffic (chat, song requests, stickers, gifts, joins) is
-  // opt-in with MOCK_CHAT=1 so plain MOCK=1 only fires follow alerts.
+  // opt-in with MOCK_CHAT=1 so plain MOCK=1 only fires follow alerts. Chat goes
+  // through handleIncomingComment like the real thing, profanity filter included.
   if (process.env.MOCK_CHAT === '1') {
     setInterval(() => {
-      const nickname = mockUsers[Math.floor(Math.random() * mockUsers.length)];
-      const message = {
-        type: 'chat',
-        user: nickname,
-        nickname,
-        avatarUrl: mockAvatar(nickname),
-        comment: mockComments[Math.floor(Math.random() * mockComments.length)],
-      };
-      console.log(`[MOCK] ${message.nickname}: ${message.comment}`);
-      broadcast(message);
-      handleSongRequestComment(message.user, message.nickname, message.comment);
+      handleIncomingComment({ type: 'chat', ...mockViewer(randomItem(mockUsers)), comment: randomItem(mockComments) });
     }, 2500);
+
+    // YouTube chat, shaped like youtube-chat.js's messages (yt:-prefixed user,
+    // handle without "@").
+    const mockYoutubeUsers = ['Somchai_TH', 'lofi_listener', 'มะม่วงหวาน', 'GamerBoy99', 'น้องหมี 🐻'];
+    const mockYoutubeComments = [
+      'มาจาก YouTube ครับ 👋',
+      'ดูจากยูทูปอยู่ ภาพชัดมาก',
+      'hello from YouTube!',
+      'ขอเพลงด้วยครับ',
+      'ไลฟ์ทุกวันเลยไหมคะ',
+      '555555 ฮามาก',
+      'ควย', // dropped by the profanity filter -- never reaches the overlay
+    ];
+    setInterval(() => {
+      const nickname = randomItem(mockYoutubeUsers);
+      handleIncomingComment({
+        type: 'chat',
+        platform: 'youtube',
+        user: `yt:${nickname}`,
+        nickname,
+        avatarUrl: mockAvatar('yt-' + nickname),
+        comment: randomItem(mockYoutubeComments),
+      });
+    }, 3700);
 
     // Song requests get their own stream rather than being sprinkled into
     // mockComments, and are cycled instead of randomised, so a short session
@@ -1085,70 +1340,45 @@ if (MOCK_MODE) {
       const nickname = mockUsers[mockSongIndex % mockUsers.length];
       const link = mockSongLinks[mockSongIndex % mockSongLinks.length];
       mockSongIndex += 1;
-      const message = {
-        type: 'chat',
-        user: nickname,
-        nickname,
-        avatarUrl: mockAvatar(nickname),
-        comment: `/music ${link}`,
-      };
-      console.log(`[MOCK] ${nickname} ขอเพลง ${link}`);
-      broadcast(message);
-      handleSongRequestComment(message.user, message.nickname, message.comment);
+      handleIncomingComment({ type: 'chat', ...mockViewer(nickname), comment: `/music ${link}` });
     }, 9000);
 
     setInterval(() => {
-      const nickname = mockUsers[Math.floor(Math.random() * mockUsers.length)];
-      const message = {
-        type: 'emote',
-        user: nickname,
-        nickname,
-        avatarUrl: mockAvatar(nickname),
-        emoteImages: [mockAvatar('sticker-' + Math.floor(Math.random() * 5))],
-      };
-      console.log(`[MOCK] ${message.nickname} sent a sticker`);
-      broadcast(message);
+      const viewer = mockViewer(randomItem(mockUsers));
+      console.log(`[MOCK] ${viewer.nickname} sent a sticker`);
+      emitLiveEvent({ type: 'emote', ...viewer, emoteImages: [mockAvatar('sticker-' + Math.floor(Math.random() * 5))] });
     }, 11000);
 
     setInterval(() => {
-      const gift = mockGifts[Math.floor(Math.random() * mockGifts.length)];
-      const nickname = mockUsers[Math.floor(Math.random() * mockUsers.length)];
-      const message = {
+      const gift = randomItem(mockGifts);
+      const repeatCount = Math.floor(Math.random() * 5) + 1;
+      const viewer = mockViewer(randomItem(mockUsers));
+      console.log(`[MOCK] ${viewer.nickname} sent ${gift.name} x${repeatCount}`);
+      emitLiveEvent({
         type: 'gift',
-        user: nickname,
-        nickname,
-        avatarUrl: mockAvatar(nickname),
+        ...viewer,
         giftName: gift.name,
         giftImage: gift.image,
-        repeatCount: Math.floor(Math.random() * 5) + 1,
-      };
-      console.log(`[MOCK] ${message.nickname} sent ${message.giftName} x${message.repeatCount}`);
-      broadcast(message);
+        repeatCount,
+        diamondCount: gift.diamonds * repeatCount,
+      });
     }, 8000);
 
     setInterval(() => {
-      const nickname = mockUsers[Math.floor(Math.random() * mockUsers.length)];
-      const message = {
-        type: 'member',
-        user: nickname,
-        nickname,
-        avatarUrl: mockAvatar(nickname),
-      };
-      console.log(`[MOCK] ${message.nickname} joined`);
-      broadcast(message);
+      const viewer = mockViewer(randomItem(mockUsers));
+      console.log(`[MOCK] ${viewer.nickname} joined`);
+      emitLiveEvent({ type: 'member', ...viewer });
     }, 5000);
   }
 
+  // /follow alerts once per user per session, so reusing the nickname as the
+  // user id would stop the alerts after every mock name had followed once.
+  let mockFollowSeq = 0;
   setInterval(() => {
-    const nickname = mockUsers[Math.floor(Math.random() * mockUsers.length)];
-    const message = {
-      type: 'follow',
-      user: nickname,
-      nickname,
-      avatarUrl: mockAvatar(nickname),
-    };
-    console.log(`[MOCK] ${message.nickname} followed`);
-    broadcast(message);
+    mockFollowSeq += 1;
+    const viewer = { ...mockViewer(randomItem(mockUsers)), user: `mock-follow-${mockFollowSeq}` };
+    console.log(`[MOCK] ${viewer.nickname} followed`);
+    emitLiveEvent({ type: 'follow', ...viewer });
   }, 15000);
 } else {
   const tiktokConnection = new TikTokLiveConnection(TIKTOK_USERNAME, {});
@@ -1174,29 +1404,21 @@ if (MOCK_MODE) {
   }
   connectToTikTok();
 
+  // The viewer fields every TikTok event carries, in our message shape.
+  const tiktokViewer = (data) => ({
+    platform: 'tiktok',
+    user: data.user?.uniqueId,
+    nickname: data.user?.nickname,
+    avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
+  });
+
   tiktokConnection.on(WebcastEvent.CHAT, (data) => {
     // Wrapped in try/catch so a malformed event (unexpected field shape from
     // TikTok) logs and moves on instead of silently dropping the comment with
     // no trace -- this is the only place a "comment never showed up" report
     // could originate from on our side.
     try {
-      const message = {
-        type: 'chat',
-        user: data.user?.uniqueId,
-        nickname: data.user?.nickname,
-        comment: data.content,
-        avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
-      };
-      if (isProfaneComment(message.comment)) {
-        liveLog('filtered', { reason: 'profanity', user: message.user, content: message.comment });
-        console.log(`[filtered] ${message.nickname}: ${message.comment}`);
-        return;
-      }
-      console.log(`${message.nickname}: ${message.comment}`);
-      broadcast(message);
-      // A Song request is a Comment first and stays one -- it is broadcast and
-      // spoken like any other, and only *additionally* considered for the queue.
-      handleSongRequestComment(message.user, message.nickname, message.comment);
+      handleIncomingComment({ type: 'chat', ...tiktokViewer(data), comment: data.content });
     } catch (err) {
       liveLog('error', { where: 'chat-handler', user: data?.user?.uniqueId, content: data?.content, error: err.message });
       console.error('[chat] CHAT handler threw for raw event', {
@@ -1217,40 +1439,28 @@ if (MOCK_MODE) {
 
     const message = {
       type: 'gift',
-      user: data.user?.uniqueId,
-      nickname: data.user?.nickname,
-      avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
+      ...tiktokViewer(data),
       giftName: data.gift?.name || 'ของขวัญ',
       giftImage: data.gift?.image?.urlList?.[0] || '',
       repeatCount: data.repeatCount || 1,
       diamondCount: (data.gift?.diamondCount || 0) * (data.repeatCount || 1),
     };
     console.log(`${message.nickname} sent ${message.giftName} x${message.repeatCount}`);
-    broadcast(message);
+    emitLiveEvent(message);
   });
 
   tiktokConnection.on(WebcastEvent.MEMBER, (data) => {
-    const message = {
-      type: 'member',
-      user: data.user?.uniqueId,
-      nickname: data.user?.nickname,
-      avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
-    };
+    const message = { type: 'member', ...tiktokViewer(data) };
     if (!message.nickname) return;
     console.log(`${message.nickname} joined`);
-    broadcast(message);
+    emitLiveEvent(message);
   });
 
   tiktokConnection.on(WebcastEvent.FOLLOW, (data) => {
-    const message = {
-      type: 'follow',
-      user: data.user?.uniqueId,
-      nickname: data.user?.nickname,
-      avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
-    };
+    const message = { type: 'follow', ...tiktokViewer(data) };
     if (!message.nickname) return;
     console.log(`${message.nickname} followed`);
-    broadcast(message);
+    emitLiveEvent(message);
   });
 
   // Without an ERROR listener the connector swallows these silently -- and a
@@ -1299,21 +1509,18 @@ if (MOCK_MODE) {
   });
 
   // Sticker/emote comments (subscriber stickers) arrive as their own event,
-  // not CHAT, and carry only images -- no text. Before this handler they never
-  // reached the overlay at all.
+  // not CHAT, and carry only images -- no text.
   tiktokConnection.on(WebcastEvent.EMOTE, (data) => {
     try {
       const message = {
         type: 'emote',
-        user: data.user?.uniqueId,
-        nickname: data.user?.nickname,
-        avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
+        ...tiktokViewer(data),
         emoteImages: (data.emoteList || [])
           .map((emote) => emote?.image?.urlList?.[0])
           .filter(Boolean),
       };
       console.log(`[emote] ${message.nickname}: ${message.emoteImages.length} sticker(s)`);
-      if (message.emoteImages.length) broadcast(message);
+      if (message.emoteImages.length) emitLiveEvent(message);
     } catch (err) {
       liveLog('error', { where: 'emote-handler', user: data?.user?.uniqueId, error: err.message });
       console.error('[emote] EMOTE handler threw', {
@@ -1323,9 +1530,7 @@ if (MOCK_MODE) {
     }
   });
 
-  // DISCONNECTED lives on ControlEvent, not WebcastEvent -- WebcastEvent.DISCONNECTED
-  // is undefined, so this listener never fired and a dropped connection mid-live
-  // was never retried.
+  // DISCONNECTED lives on ControlEvent; WebcastEvent.DISCONNECTED is undefined.
   tiktokConnection.on(ControlEvent.DISCONNECTED, () => {
     console.log('Disconnected from TikTok live. Retrying...');
     liveLog('tiktok-state', { event: 'disconnected' });

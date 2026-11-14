@@ -7,31 +7,73 @@
 </head>
 <body>
   <div id="widget">
-    <div id="card">
-      <div id="shine" aria-hidden="true"></div>
-      <div id="stage">
-        <div class="slot">
-          <div class="badge"></div>
-          <div class="info">
-            <span class="sub"></span>
-            <span class="name"></span>
-          </div>
-          <div class="amt"><span class="amount"></span><span class="baht">฿</span></div>
+    <div id="pill" class="phase-in">
+      <div id="shine-clip" aria-hidden="true"><div id="shine"></div></div>
+
+      <div id="badge-wrap">
+        <div class="pulse" aria-hidden="true"></div>
+        <div class="pulse p2" aria-hidden="true"></div>
+
+        <div id="badge">
+          <!-- rank 1: gold, crown + laurel, red ribbon -->
+          <svg class="medal m1" role="img" aria-label="เหรียญทอง อันดับ 1" viewBox="0 0 60 60">
+            <defs><linearGradient id="mg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF1BF"/><stop offset="0.5" stop-color="#F5C451"/><stop offset="1" stop-color="#B07A12"/></linearGradient></defs>
+            <path d="M22 37 L29 39 L25 57 L21.5 53 L17 56 Z" fill="#E5484D"/>
+            <path d="M38 37 L31 39 L35 57 L38.5 53 L43 56 Z" fill="#B8333A"/>
+            <g fill="#F5C451" stroke="#B07A12" stroke-width="0.8">
+              <ellipse cx="13.5" cy="36" rx="2.4" ry="4.4" transform="rotate(-50 13.5 36)"/>
+              <ellipse cx="11" cy="29" rx="2.4" ry="4.4" transform="rotate(-20 11 29)"/>
+              <ellipse cx="12" cy="21.5" rx="2.4" ry="4.4" transform="rotate(15 12 21.5)"/>
+              <ellipse cx="46.5" cy="36" rx="2.4" ry="4.4" transform="rotate(50 46.5 36)"/>
+              <ellipse cx="49" cy="29" rx="2.4" ry="4.4" transform="rotate(20 49 29)"/>
+              <ellipse cx="48" cy="21.5" rx="2.4" ry="4.4" transform="rotate(-15 48 21.5)"/>
+            </g>
+            <circle cx="30" cy="29" r="13" fill="url(#mg1)" stroke="#B07A12" stroke-width="1.2"/>
+            <circle cx="30" cy="29" r="9.5" fill="none" stroke="#FFF1BF" stroke-opacity="0.75" stroke-width="1.2"/>
+            <path d="M24 25 A8 8 0 0 1 30 21" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <path d="M22 16.5 L20.5 6 L25.5 10 L30 3 L34.5 10 L39.5 6 L38 16.5 Z" fill="#F5C451" stroke="#B07A12" stroke-width="1.2" stroke-linejoin="round"/>
+            <circle cx="30" cy="11.5" r="1.6" fill="#E5484D"/>
+          </svg>
+          <!-- rank 2: silver, star, blue ribbon -->
+          <svg class="medal m2" role="img" aria-label="เหรียญเงิน อันดับ 2" viewBox="0 0 60 60">
+            <defs><linearGradient id="mg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.5" stop-color="#CDD3DE"/><stop offset="1" stop-color="#7F889B"/></linearGradient></defs>
+            <path d="M22 37 L29 39 L25 57 L21.5 53 L17 56 Z" fill="#4C7DFF"/>
+            <path d="M38 37 L31 39 L35 57 L38.5 53 L43 56 Z" fill="#3157C8"/>
+            <circle cx="30" cy="29" r="13" fill="url(#mg2)" stroke="#7F889B" stroke-width="1.2"/>
+            <circle cx="30" cy="29" r="9.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1.2"/>
+            <path d="M24 25 A8 8 0 0 1 30 21" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <path d="M30 3 L32.1 8.1 L37.6 8.5 L33.4 12 L34.7 17.4 L30 14.5 L25.3 17.4 L26.6 12 L22.4 8.5 L27.9 8.1 Z" fill="#CDD3DE" stroke="#7F889B" stroke-width="1.2" stroke-linejoin="round"/>
+          </svg>
+          <!-- rank 3: bronze, gem, green ribbon -->
+          <svg class="medal m3" role="img" aria-label="เหรียญทองแดง อันดับ 3" viewBox="0 0 60 60">
+            <defs><linearGradient id="mg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FAD7B5"/><stop offset="0.5" stop-color="#DD9A66"/><stop offset="1" stop-color="#95552A"/></linearGradient></defs>
+            <path d="M22 37 L29 39 L25 57 L21.5 53 L17 56 Z" fill="#2FA37A"/>
+            <path d="M38 37 L31 39 L35 57 L38.5 53 L43 56 Z" fill="#1F7A5A"/>
+            <circle cx="30" cy="29" r="13" fill="url(#mg3)" stroke="#95552A" stroke-width="1.2"/>
+            <circle cx="30" cy="29" r="9.5" fill="none" stroke="#FAD7B5" stroke-opacity="0.75" stroke-width="1.2"/>
+            <path d="M24 25 A8 8 0 0 1 30 21" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <path d="M25 6 L35 6 L38 10 L30 17.5 L22 10 Z" fill="#DD9A66" stroke="#95552A" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M22 10 L38 10 M27 6 L26 10 L30 17.5 L34 10 L33 6" stroke="#95552A" stroke-width="0.8" fill="none" stroke-linejoin="round"/>
+          </svg>
+          <!-- rank 4+: plain numbered disc -->
+          <div class="plain"><span id="plain-rank"></span></div>
         </div>
-        <div class="slot">
-          <div class="badge"></div>
-          <div class="info">
-            <span class="sub"></span>
-            <span class="name"></span>
-          </div>
-          <div class="amt"><span class="amount"></span><span class="baht">฿</span></div>
-        </div>
-        <div id="empty">รอข้อมูลโดเนท…</div>
+
+        <svg class="tw t1" aria-hidden="true" viewBox="0 0 10 10"><path d="M5 0 L6 4 L10 5 L6 6 L5 10 L4 6 L0 5 L4 4 Z"/></svg>
+        <svg class="tw t2" aria-hidden="true" viewBox="0 0 10 10"><path d="M5 0 L6 4 L10 5 L6 6 L5 10 L4 6 L0 5 L4 4 Z"/></svg>
+        <svg class="tw t3" aria-hidden="true" viewBox="0 0 10 10"><path d="M5 0 L6 4 L10 5 L6 6 L5 10 L4 6 L0 5 L4 4 Z"/></svg>
       </div>
+
+      <div id="meta">
+        <div id="label" class="anim a1"></div>
+        <div id="name" class="anim a2"></div>
+        <div id="dots" aria-hidden="true"></div>
+      </div>
+
+      <div id="amt" class="anim a3"><span id="amount">0.00</span><span id="baht">฿</span></div>
     </div>
   </div>
 
-  <script src="/widgets/shared/themes.js"></script>
   <script src="/widgets/top-donate/top-donate.js"></script>
 </body>
 </html>

@@ -22,6 +22,10 @@ HTTP_PORT=8080
 The account must be **currently live** or the connection will fail (it retries automatically every
 10 seconds, so you can start the server before going live).
 
+To also show YouTube live chat in the same overlay, set `YOUTUBE_CHANNEL` (your `@handle`) or
+`YOUTUBE_VIDEO_ID` (for unlisted streams). No API key is needed; the server waits until the channel
+goes live. Each chat line gets a colour dot before the name: cyan = TikTok, red = YouTube.
+
 ## Run
 
 ```bash
@@ -36,6 +40,9 @@ $env:MOCK = "1"; npm start
 
 Generates fake chat, gift, and member-join events on intervals so you can preview the overlay and hear
 TTS without an active TikTok live session.
+
+Mock mode keeps its own Gift history in `logs/mock-gifts/`, never mixed with the real one. To fill
+`/gifts` with 30 days of fake history first, run `npm run seed:gifts` (re-running replaces it).
 
 ## Use with OBS/Streamlabs
 
@@ -66,7 +73,26 @@ TTS without an active TikTok live session.
 - **`/`** is the streamer-facing Control Room (`index.html`) — links to every Browser Source URL, TTS
   provider/on-off/speed controls, and the EasyDonate leaderboard status, all synced live over the same
   WebSocket. **`/panel`** is a second streamer-only page for pinning comments, showing the session stats
-  summary, and controlling the BRB timer.
+  summary, and controlling the BRB timer. **`/gifts`** charts TikTok Gifts for today / yesterday / 7 / 30 days — diamonds per hour or day,
+  per gift type, top gifters, recent Gifts, CSV export — from the Gift history in `logs/gifts-*.jsonl`
+  (served by `/api/gift-events`). The Control Room shows `/gifts` and `/panel` in its sidebar; all three
+  share `widgets/shared/dashboard.css` and a light/dark toggle.
+
+### YouTube Music now playing (`/ytmusic`)
+
+A pill-shaped card (spinning record art, title, artist) for the track playing in your own `music.youtube.com`
+browser tab, plus the next song in its queue.
+YouTube Music has no API for this, so a userscript in that tab reads the page and posts it to the server:
+
+1. Install [Tampermonkey](https://www.tampermonkey.net/) in the browser you play music in.
+2. With `npm start` running, open `http://localhost:8080/ytmusic.user.js` and click **Install**.
+3. Play something on `music.youtube.com`, then add `http://localhost:8080/ytmusic` as a Browser Source.
+
+Query options: `?theme=` (shared themes from `widgets/shared/themes.js`, e.g. `ocean`, `sunset`; default is dark + orange), `?next=0` (hide the
+next-song line), `?demo=1` (fake track for positioning). The card hides as soon as the tab closes (or ~2 min after the tab stops reporting, e.g. a crash); a tab in the background keeps it alive. The queue
+comes from the page's DOM, so a YouTube Music redesign can break it until the selectors in
+`widgets/ytmusic/ytmusic.user.js` are updated; the current track itself comes from the Media Session API
+and is more robust.
 
 See [`CONTEXT.md`](./CONTEXT.md) for the project's domain language (Gift streak, Repeat flood, Pattern
 collapse, etc.) and [`docs/plan-current-overlay-features.md`](./docs/plan-current-overlay-features.md)

@@ -3,689 +3,648 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>TikTok Live Reader — Control Room</title>
+<title>Live Reader — Control Room</title>
+<script src="/widgets/shared/dashboard-theme.js"></script>
+<link rel="stylesheet" href="/widgets/shared/dashboard.css" />
 <style>
-  @font-face {
-    font-family: "Kanit";
-    src: url("/fonts/Kanit-Medium.ttf") format("truetype");
-    font-weight: 500;
-  }
-  @font-face {
-    font-family: "Kanit";
-    src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
-    font-weight: 600;
-  }
-  @font-face {
-    font-family: "Kanit";
-    src: url("/fonts/Kanit-Bold.ttf") format("truetype");
-    font-weight: 700;
-  }
+  body { min-height: 100vh; }
+  .app { display: flex; min-height: 100vh; }
 
-  * { box-sizing: border-box; }
-
-  html, body { margin: 0; padding: 0; min-height: 100%; }
-
-  body {
-    background: #08080a;
-    color: #ededf0;
-    font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
-
-  @keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
-
-  main {
-    min-height: 100vh;
-    padding: 18px 20px 48px;
-    max-width: 1480px;
-    margin: 0 auto;
-  }
-
-  /* ---- header ---- */
-  .header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #1b1b20;
-  }
-  .brand { display: flex; align-items: center; gap: 11px; }
-  .brand .badge {
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    background: #ff2d55;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 15px;
-    font-weight: 700;
-  }
-  .brand .name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
-  .brand .sub { font-size: 11px; color: #7a7a85; margin-top: 2px; }
-
-  .status-pill {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px 6px 10px;
-    border-radius: 999px;
-  }
-  .status-pill.connected { border: 1px solid #2a1219; background: #14090c; }
-  .status-pill.offline { border: 1px solid #262215; background: #14110a; }
-  .status-dot { width: 7px; height: 7px; border-radius: 50%; }
-  .status-pill.connected .status-dot { background: #ff2d55; animation: livePulse 1.6s ease-in-out infinite; }
-  .status-pill.offline .status-dot { background: #ffb63a; }
-  .status-pill .label { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
-  .status-pill .sep { width: 1px; height: 12px; background: #2a1219; }
-  .status-pill .detail { font-size: 12px; color: #b9b9c2; }
-
-  .header .spacer { flex: 1 1 20px; }
-
-  /* ---- layout ---- */
-  .layout { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; padding-top: 18px; }
-
+  /* ---- sidebar ---- */
   .sidebar {
-    flex: 0 0 210px;
-    min-width: 190px;
-    display: flex;
-    flex-direction: column;
-    gap: 22px;
+    flex: 0 0 232px;
     position: sticky;
-    top: 18px;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    padding: 26px 16px 20px;
+    border-right: 1px solid var(--divider);
   }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+  .brand-mark { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--accent); }
+  .brand-mark::after {
+    content: "";
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    border: 3px solid var(--bg);
+  }
+  .brand-name { font-family: var(--font-heading); font-size: 17px; line-height: 1.1; }
+  .brand-sub { font-size: 12px; color: var(--n-700); }
 
-  .nav { display: flex; flex-direction: column; gap: 3px; }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
   .nav button {
-    text-align: left;
-    border: none;
-    border-radius: 9px;
-    padding: 9px 11px;
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 999px;
     background: transparent;
-    color: #8a8a94;
-  }
-  .nav button.active { background: #1b1b21; color: #ffffff; }
-  .nav button:hover:not(.active) { color: #c9c9d1; }
-
-  .section-title {
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    color: #5e5e68;
+    color: var(--n-700);
+    font-size: 14px;
     font-weight: 600;
-    padding: 0 11px 9px;
-  }
-
-  .stats { display: flex; flex-direction: column; gap: 11px; padding: 0 11px; }
-  .stat-label { font-size: 11px; color: #7a7a85; }
-  .stat-value { font-size: 19px; margin-top: 2px; }
-  .stat-value.accent { color: #ff2d55; }
-
-  .refresh-stats {
-    margin: 2px 11px 0;
-    background: #16161a;
-    border: 1px solid #26262c;
-    color: #c9c9d1;
-    border-radius: 8px;
-    padding: 7px 0;
-    font-size: 11.5px;
-    font-family: inherit;
+    text-align: left;
     cursor: pointer;
   }
-  .refresh-stats:hover { border-color: #3d3d48; color: #ffffff; }
+  .nav button:hover { background: var(--n-200); }
+  .nav button.active { background: var(--surface); color: var(--text); }
 
-  .note {
-    padding: 11px;
-    border: 1px dashed #26262c;
-    border-radius: 11px;
-    font-size: 11px;
-    color: #8a8a94;
-    line-height: 1.55;
-  }
-
-  .content { flex: 1 1 560px; min-width: 300px; }
-  .view { display: none; }
-  .view.active { display: block; }
-
-  /* ---- overlay cards ---- */
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 13px;
-  }
-
-  .card {
-    background: #101013;
-    border: 1px solid #232329;
-    border-radius: 14px;
-    padding: 14px;
+  .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+  .connections {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    padding: 16px;
+    border-radius: var(--radius-md);
+    background: var(--n-100);
+    box-shadow: var(--shadow-sm);
   }
-  .card .top { display: flex; align-items: flex-start; gap: 10px; }
-  .card .icon {
-    flex: 0 0 auto;
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 17px;
-    background: linear-gradient(135deg, var(--a, #ff2d55), var(--b, #ff8a5c));
-  }
-  .card .title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-  .card .path { font-size: 10px; color: #7a7a85; margin-top: 4px; }
-  .card .desc { font-size: 12px; color: #8a8a94; line-height: 1.5; margin-top: 2px; }
-  .card .row { display: flex; gap: 7px; }
-
-  .btn {
-    flex: 1 1 auto;
-    background: #16161a;
-    border: 1px solid #26262c;
-    color: #c9c9d1;
-    border-radius: 8px;
-    padding: 8px 0;
+  .status-pill { display: grid; grid-template-columns: 10px 1fr; column-gap: 10px; align-items: center; }
+  .status-pill[hidden] { display: none; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--n-400); }
+  .status-pill.connected .status-dot { background: var(--accent); box-shadow: 0 0 0 4px var(--a-200); }
+  .status-pill .label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
+  .status-pill .detail {
+    grid-column: 2;
     font-size: 12px;
-    font-family: inherit;
-    font-weight: 500;
-    cursor: pointer;
-    text-align: center;
-  }
-  .btn:hover { border-color: #3d3d48; color: #ffffff; }
-  .btn.copy {
-    flex: 0 0 auto;
-    padding: 8px 13px;
-    background: rgba(255, 45, 85, 0.1);
-    border: 1px solid rgba(255, 45, 85, 0.34);
-    color: #ff7a94;
-  }
-  .btn.copy:hover { background: rgba(255, 45, 85, 0.18); color: #ff7a94; }
-  .btn.copy.copied { border-color: #22c1c3; color: #7be8e9; background: rgba(34, 193, 195, 0.12); }
-
-  .section { margin-top: 26px; }
-  .section-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #c9c9d1;
-    margin: 0 0 12px;
-  }
-
-  /* ---- setup view ---- */
-  .panel-box { background: #101013; border: 1px solid #232329; border-radius: 14px; padding: 18px; }
-  .panel-box + .panel-box { margin-top: 14px; }
-  .panel-box .h { font-size: 15px; font-weight: 600; }
-  .panel-box .sub { font-size: 12px; color: #8a8a94; margin-top: 4px; }
-
-  .segmented {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: #0c0c0f;
-    border: 1px solid #26262c;
-    border-radius: 999px;
-    padding: 3px;
-    margin-top: 12px;
-  }
-  .segmented .seg-label { font-size: 11px; font-weight: 600; color: #7a7a85; padding: 0 8px 0 6px; }
-  .segmented button {
-    border: none;
-    background: transparent;
-    color: #8a8a94;
-    font-family: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 7px 14px;
-    border-radius: 999px;
-    cursor: pointer;
-  }
-  .segmented button.active { background: #ff2d55; color: #ffffff; }
-
-  .url-rows { margin-top: 14px; display: flex; flex-direction: column; }
-  .url-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 11px 0;
-    border-top: 1px solid #1b1b20;
-    flex-wrap: wrap;
-  }
-  .url-row .name-col { flex: 0 0 140px; min-width: 120px; }
-  .url-row .name { font-size: 13px; font-weight: 500; }
-  .url-row .path { font-size: 10px; color: #7a7a85; margin-top: 3px; }
-  .url-row .url {
-    flex: 1 1 220px;
-    min-width: 180px;
-    font-size: 11px;
-    color: #8a8a94;
-    background: #0c0c0f;
-    border: 1px solid #1f1f25;
-    border-radius: 8px;
-    padding: 8px 10px;
+    color: var(--n-700);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .theme-toggle { width: 100%; }
+  [data-theme="dark"] .theme-toggle .moon, :root:not([data-theme="dark"]) .theme-toggle .sun { display: none; }
 
-  .steps { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
-  .step { display: flex; gap: 11px; }
-  .step .num {
-    flex: 0 0 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #1a0c10;
-    border: 1px solid #3a1520;
-    color: #ff7a94;
-    font-size: 11px;
+  /* ---- content ---- */
+  .content { flex: 1 1 auto; min-width: 0; }
+  .view { display: none; }
+  .view.active { display: block; }
+  /* Gifts / Panel are their own pages (still openable on their own, e.g. on a
+     second monitor) shown here full-bleed; they bring their own header. */
+  .content.embedded { padding: 0; }
+  .embed-frame { display: block; width: 100%; height: 100vh; border: 0; background: var(--bg); }
+
+  /* ---- overlay cards ---- */
+  .base-url {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 10px;
+    padding: 6px 6px 6px 18px;
+    border-radius: 999px;
+    background: var(--n-100);
+    box-shadow: var(--shadow-sm);
   }
-  .step .text { font-size: 12px; color: #c9c9d1; line-height: 1.55; }
-  .step .text b { color: #ededf0; font-weight: 600; }
+  .base-url span { font-size: 12px; font-weight: 600; color: var(--n-700); }
+  .base-url input { width: 210px; padding: 8px 14px; font-size: 13px; font-family: var(--font-mono); }
+  .overlay-count { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; font-size: 13px; color: var(--n-700); }
+  .overlay-count .tag { padding: 4px 12px; font-size: 13px; font-weight: 600; }
 
-  .setup-grid { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
-  .setup-grid .panel-box { flex: 1 1 320px; min-width: 260px; margin-top: 0; }
-
-  .copy-all {
-    background: #ff2d55;
-    border: none;
-    color: #ffffff;
-    border-radius: 9px;
-    padding: 9px 14px;
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+  .card { display: flex; flex-direction: column; border-radius: var(--radius-lg); background: var(--n-100); box-shadow: var(--shadow-sm); overflow: hidden; }
+  .stage {
+    position: relative;
+    margin: 10px 10px 0;
+    height: 150px;
+    border-radius: 20px;
+    overflow: hidden;
+    background-color: var(--stage-bg);
+    background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 14px 14px;
+  }
+  .stage-rows { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+  .stage-row {
+    display: flex;
+    gap: 7px;
+    align-items: baseline;
+    max-width: 100%;
+    padding: 6px 12px;
+    border-radius: 14px;
+    background: rgba(20, 18, 16, 0.78);
+    color: #f6eee2;
+    font-size: 12.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stage-row b { color: #f6a06b; font-weight: 700; }
+  .stage-row.hot { background: rgba(198, 113, 57, 0.88); }
+  .stage-row.hot b { color: #fff3e6; }
+  .stage-size {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.45);
+    color: #d9cfbf;
+    font-size: 11px;
+    font-family: var(--font-mono);
+  }
+  .card-body { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px 18px; flex: 1; }
+  .card-title { font-family: var(--font-heading); font-size: 19px; line-height: 1.2; }
+  .card-desc { font-size: 13px; color: var(--n-700); margin-top: 2px; }
+  .card-desc code { font-family: var(--font-mono); font-size: 11.5px; }
+  .url-pill { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 8px 8px 8px 14px; border-radius: 999px; background: var(--surface); }
+  .url-pill code {
+    flex: 1;
+    min-width: 0;
     font-size: 12px;
-    font-family: inherit;
-    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--n-800);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card-actions { display: flex; align-items: center; gap: 8px; }
+
+  /* ---- preview modal ---- */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: color-mix(in srgb, #201e1d 55%, transparent);
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    width: min(860px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 22px;
+    border-radius: var(--radius-lg);
+    background: var(--n-100);
+    box-shadow: var(--shadow-lg);
+  }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .modal-title { font-family: var(--font-heading); font-size: 22px; }
+  .modal-close { width: 36px; height: 36px; padding: 0; border: 0; background: var(--surface); }
+  .modal-stage { aspect-ratio: 16 / 9; height: auto; margin: 0; }
+  .modal-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
+
+  /* ---- settings ---- */
+  .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 20px; align-items: start; }
+  .settings .panel { padding: 26px 28px; gap: 0; }
+  .settings h3 { font-size: 21px; margin-bottom: 4px; }
+  .settings .lead { margin: 0 0 18px; font-size: 13px; color: var(--n-700); }
+  .choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .choice {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 16px 18px;
+    border: 2px solid var(--divider);
+    border-radius: 22px;
+    background: var(--n-100);
+    color: var(--text);
+    text-align: left;
     cursor: pointer;
   }
-  .copy-all:hover { background: #e82449; }
-  .copy-all.copied { background: #22c1c3; }
+  .choice.active { border-color: var(--accent); background: var(--a-100); }
+  .choice-top { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; }
+  .choice-name { font-family: var(--font-heading); font-size: 17px; }
+  .choice-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--divider); }
+  .choice.active .choice-radio { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--a-100); }
+  .choice-desc { font-size: 12.5px; color: var(--n-700); line-height: 1.4; }
+  .choice.compact { padding: 14px 16px; border-radius: 20px; gap: 3px; }
+  .choice.compact .choice-name { font-family: var(--font-body); font-size: 14px; font-weight: 700; }
 
-  .panel-box-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .slider-row { display: flex; flex-direction: column; gap: 8px; max-width: 420px; margin-top: 18px; }
+  .slider-top { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; }
+  .slider-top span:last-child { color: var(--a-700); }
+  .slider-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .slider-ends { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--n-700); }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 0;
+    border-top: 1px solid var(--divider);
+  }
+  .setting-row.first { border-top: 0; padding-top: 0; }
+  .setting-name { font-weight: 600; }
+  .setting-desc { font-size: 12.5px; color: var(--n-700); }
+  .notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--n-700); line-height: 1.6; }
+  .notes b { color: var(--text); font-weight: 600; }
+
+  @media (max-width: 860px) {
+    .app { flex-direction: column; }
+    .sidebar { position: static; height: auto; flex: none; border-right: 0; border-bottom: 1px solid var(--divider); gap: 16px; }
+    .nav { flex-direction: row; flex-wrap: wrap; }
+    .sidebar-foot { margin-top: 0; }
+    .card-grid { grid-template-columns: 1fr; }
+    .base-url input { width: 160px; }
+  }
 </style>
 </head>
 <body>
-<main>
+<div class="app">
 
-  <div class="header">
+  <aside class="sidebar">
     <div class="brand">
-      <div class="badge">L</div>
+      <div class="brand-mark"></div>
       <div>
-        <div class="name">TikTok Live Reader</div>
-        <div class="sub mono">control room</div>
+        <div class="brand-name">Live Reader</div>
+        <div class="brand-sub">Stream widgets</div>
       </div>
     </div>
 
-    <div class="status-pill offline" id="status-pill">
-      <span class="status-dot"></span>
-      <span class="label" id="status-label">OFFLINE</span>
-      <span class="sep"></span>
-      <span class="detail mono" id="status-detail">กำลังตรวจสอบ…</span>
+    <nav class="nav">
+      <button type="button" class="active" data-view="overlays">
+        <svg class="svg-icon" width="18" height="18" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.170 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>Overlay
+      </button>
+      <button type="button" data-view="gifts">
+        <svg class="svg-icon" width="18" height="18" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>Gifts
+      </button>
+      <button type="button" data-view="panel">
+        <svg class="svg-icon" width="18" height="18" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg>Panel
+      </button>
+      <button type="button" data-view="settings">
+        <svg class="svg-icon" width="18" height="18" viewBox="0 0 24 24"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>Settings
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="connections">
+        <div class="status-pill" id="status-pill">
+          <span class="status-dot"></span>
+          <span class="label" id="status-label">TIKTOK OFFLINE</span>
+          <span class="detail" id="status-detail">กำลังตรวจสอบ…</span>
+        </div>
+        <div class="status-pill" id="yt-status-pill" hidden>
+          <span class="status-dot"></span>
+          <span class="label" id="yt-status-label">YOUTUBE</span>
+          <span class="detail" id="yt-status-detail">กำลังตรวจสอบ…</span>
+        </div>
+      </div>
+      <button type="button" class="btn theme-toggle" id="theme-toggle">
+        <svg class="svg-icon moon" width="16" height="16" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <svg class="svg-icon sun" width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <span id="theme-label">Dark mode</span>
+      </button>
     </div>
+  </aside>
 
-    <div class="spacer"></div>
-  </div>
+  <main class="content" id="content">
 
-  <div class="layout">
-
-    <div class="sidebar">
-      <div class="nav">
-        <button type="button" class="active" data-view="overlays">Overlays</button>
-        <button type="button" data-view="setup">Setup &amp; links</button>
-      </div>
-
-      <div>
-        <div class="section-title">SESSION</div>
-        <div class="stats">
-          <div>
-            <div class="stat-label">คอมเมนต์</div>
-            <div class="stat-value mono" id="stat-comments">—</div>
-          </div>
-          <div>
-            <div class="stat-label">ของขวัญ</div>
-            <div class="stat-value mono" id="stat-gifts">—</div>
-          </div>
-          <div>
-            <div class="stat-label">Diamonds</div>
-            <div class="stat-value mono accent" id="stat-diamonds">—</div>
-          </div>
-          <div>
-            <div class="stat-label">ผู้ชมที่ทัก/เข้าร่วม</div>
-            <div class="stat-value mono" id="stat-viewers">—</div>
-          </div>
+    <!-- ============ Overlay ============ -->
+    <section class="view active" id="view-overlays">
+      <header class="page-head">
+        <div>
+          <h1>Overlay</h1>
+          <p>รวม browser source ทั้งหมด — คัดลอก URL ไปวางใน OBS / TikTok LIVE Studio · พื้นหลังโปร่งใส วางซ้อนได้ทันที</p>
         </div>
-        <button type="button" class="refresh-stats" id="refresh-stats">แสดงสรุป</button>
-      </div>
+        <label class="base-url">
+          <span>Base URL</span>
+          <input class="input" id="base-url" spellcheck="false" />
+        </label>
+      </header>
+      <div class="overlay-count"><span class="tag tag-olive" id="overlay-count"></span><span>กด Preview เพื่อดู widget จริง</span></div>
+      <div class="card-grid" id="overlay-grid"></div>
+    </section>
 
-      <div class="note">ทุก browser source เป็นพื้นหลังโปร่งใส วางซ้อนใน OBS ได้ทันที</div>
-    </div>
+    <!-- ============ Gifts / Panel (iframe loaded on first open) ============ -->
+    <section class="view" id="view-gifts" data-embed>
+      <iframe class="embed-frame" data-src="/gifts" title="Gifts"></iframe>
+    </section>
+    <section class="view" id="view-panel" data-embed>
+      <iframe class="embed-frame" data-src="/panel" title="Panel"></iframe>
+    </section>
 
-    <div class="content">
-
-      <!-- ============ Overlays view ============ -->
-      <div class="view active" id="view-overlays">
-        <div class="section-label">Browser source · OBS / Streamlabs</div>
-        <div class="card-grid" id="overlay-grid"></div>
-
-        <div class="section">
-          <div class="section-label">เปิดเองในแท็บ browser ปกติ</div>
-          <div class="card-grid" id="tab-grid"></div>
+    <!-- ============ Settings ============ -->
+    <section class="view" id="view-settings">
+      <header class="page-head">
+        <div>
+          <h1>Settings</h1>
+          <p>เสียงอ่าน TTS และการเชื่อมต่อ — มีผลทันทีกับทุกหน้า</p>
         </div>
-      </div>
+      </header>
 
-      <!-- ============ Setup view ============ -->
-      <div class="view" id="view-setup">
+      <div class="settings">
+        <section class="panel">
+          <h3>TTS engine</h3>
+          <p class="lead">เลือก backend ที่ใช้สังเคราะห์เสียง</p>
+          <div class="choice-grid" id="tts-provider">
+            <button type="button" class="choice" data-value="local">
+              <span class="choice-top"><span class="choice-name">Local engine</span><span class="choice-radio"></span></span>
+              <span class="choice-desc">tts-engine-project บนเครื่องเรา</span>
+              <span class="tag tag-olive">ฟรี · ค่าเริ่มต้น</span>
+            </button>
+            <button type="button" class="choice" data-value="google">
+              <span class="choice-top"><span class="choice-name">Google Translate</span><span class="choice-radio"></span></span>
+              <span class="choice-desc">endpoint ฟรี ใช้เป็นตัวสำรองเวลา local engine ล่ม</span>
+              <span class="tag tag-olive">ฟรี · fallback</span>
+            </button>
+          </div>
+        </section>
 
-        <div class="panel-box">
-          <div class="h">การตั้งค่าเสียงอ่าน</div>
-          <div class="sub">เลือกเอนจิน TTS ที่ใช้อ่านแชท — ใช้ร่วมกันทุกหน้าผ่าน WebSocket เดียวกัน</div>
-          <div class="segmented" id="tts-provider" data-value="google">
-            <span class="seg-label">TTS</span>
-            <button type="button" data-value="local">Local Engine</button>
-            <button type="button" data-value="google" class="active">Google</button>
-          </div>
-          <div class="segmented" id="tts-enabled" data-value="on">
-            <span class="seg-label">เสียงอ่านแชท</span>
-            <button type="button" data-value="on" class="active">เปิด</button>
-            <button type="button" data-value="off">ปิด</button>
-          </div>
-          <div class="segmented" id="tts-speed" data-value="1.5">
-            <span class="seg-label">ความเร็ว</span>
-            <button type="button" data-value="0.75">0.75x</button>
-            <button type="button" data-value="1">1x</button>
-            <button type="button" data-value="1.25">1.25x</button>
-            <button type="button" data-value="1.5" class="active">1.5x</button>
-            <button type="button" data-value="1.75">1.75x</button>
-            <button type="button" data-value="2">2x</button>
-          </div>
-          <div class="segmented" id="tts-read-chance" data-value="1">
-            <span class="seg-label">อ่านเมนต์</span>
-            <button type="button" data-value="1" class="active">ทุกเมนต์</button>
-            <button type="button" data-value="0.75">75%</button>
-            <button type="button" data-value="0.5">50%</button>
-            <button type="button" data-value="0.25">25%</button>
-          </div>
-        </div>
-
-        <div class="panel-box">
-          <div class="panel-box-head">
+        <section class="panel">
+          <div class="setting-row first">
             <div>
-              <div class="h">ลิงก์ Browser source</div>
-              <div class="sub">คัดลอกทีละอันไปวางใน OBS หรือกด Copy all</div>
+              <h3>เสียงอ่าน</h3>
+              <p class="lead" style="margin: 0;">ปิดแล้วไม่อ่านแชทเลย — คอมเมนต์ยังขึ้นจอตามปกติ</p>
             </div>
-            <button type="button" class="copy-all" id="copy-all">Copy all</button>
+            <button type="button" class="switch lg" id="tts-enabled" aria-label="เปิด/ปิดเสียงอ่าน"><span></span></button>
           </div>
-          <div class="url-rows" id="url-rows"></div>
-        </div>
+          <label class="slider-row">
+            <span class="slider-top"><span>ความเร็ว</span><span id="tts-speed-label">1.50×</span></span>
+            <input type="range" id="tts-speed" min="0.5" max="2.5" step="0.05" value="1.5" />
+            <span class="slider-ends"><span>ช้า</span><span>เร็ว</span></span>
+          </label>
+        </section>
 
-        <div class="setup-grid">
-          <div class="panel-box">
-            <div class="h">วิธีใส่ใน OBS</div>
-            <div class="steps">
-              <div class="step"><span class="num">1</span><span class="text">ใน OBS กด <b>+</b> ที่ Sources แล้วเลือก <b>Browser</b></span></div>
-              <div class="step"><span class="num">2</span><span class="text">วาง URL ที่คัดลอกไว้ ใส่ Width/Height ตามที่ระบุใต้ชื่อแต่ละหน้า</span></div>
-              <div class="step"><span class="num">3</span><span class="text">ติ๊ก <b>Shutdown source when not visible</b> และ <b>Refresh browser when scene becomes active</b></span></div>
-              <div class="step"><span class="num">4</span><span class="text">กลับมาแท็บ Overlays เพื่อเปิดลิงก์ทดสอบระหว่างไลฟ์</span></div>
-            </div>
+        <section class="panel">
+          <h3>การอ่าน</h3>
+          <p class="lead">สุ่มอ่านคอมเมนต์บางส่วนเวลาแชทไหลเร็ว · Member join ไม่ถูกอ่านเสมอ</p>
+          <div class="choice-grid" id="tts-read-chance">
+            <button type="button" class="choice compact" data-value="1"><span class="choice-name">ทุกเมนต์</span><span class="choice-desc">อ่านทุกคอมเมนต์</span></button>
+            <button type="button" class="choice compact" data-value="0.75"><span class="choice-name">75%</span><span class="choice-desc">ข้ามบ้างนิดหน่อย</span></button>
+            <button type="button" class="choice compact" data-value="0.5"><span class="choice-name">50%</span><span class="choice-desc">อ่านครึ่งหนึ่ง</span></button>
+            <button type="button" class="choice compact" data-value="0.25"><span class="choice-name">25%</span><span class="choice-desc">แชทไหลเร็วมาก</span></button>
           </div>
+        </section>
 
-          <div class="panel-box">
-            <div class="h">หมายเหตุ</div>
-            <div class="steps">
-              <div class="step"><span class="num">i</span><span class="text">Chat / Pinned / Top Donate / Timer / Summary ใช้ปุ่ม "คัดลอกลิงก์" วางใน Browser Source ได้เลย</span></div>
-              <div class="step"><span class="num">i</span><span class="text">Panel เปิดเป็นแท็บ browser ปกติเท่านั้น — ไม่ใช่ widget สำหรับ OBS</span></div>
-              <div class="step"><span class="num">i</span><span class="text">Music เป็นแหล่งเสียงจริง — ใน OBS อย่าติ๊ก <b>Shutdown source when not visible</b> ไม่งั้นเพลงจะหยุดเมื่อสลับ scene</span></div>
-              <div class="step"><span class="num">i</span><span class="text">ขอเพลงต้องตั้ง <b>YOUTUBE_API_KEY</b> ใน .env ก่อน ไม่มี key = feature ปิด</span></div>
-              <div class="step"><span class="num">i</span><span class="text">เปิดโหมดขอเพลงแล้วควรปิดเสียงอ่านแชทเอง — ระบบไม่ได้ผูกให้ ทั้งสองสวิตช์อิสระต่อกัน</span></div>
-              <div class="step"><span class="num">i</span><span class="text">สรุปยอด (Comments/Gifts/Diamonds) กดแสดงเองจากแถบด้านซ้าย ไม่มีการอัปเดตอัตโนมัติ</span></div>
-            </div>
+        <section class="panel">
+          <h3>การเชื่อมต่อ</h3>
+          <p class="lead">TikTok username และ YouTube ตั้งใน <code class="mono">.env</code> ของ server</p>
+          <div class="setting-row first">
+            <div><div class="setting-name">TikTok LIVE</div><div class="setting-desc" id="tiktok-setting-detail">—</div></div>
+            <span class="tag" id="tiktok-setting-tag">—</span>
           </div>
-        </div>
+          <div class="setting-row">
+            <div><div class="setting-name">YouTube Live chat</div><div class="setting-desc" id="yt-setting-detail">ตั้ง YOUTUBE_CHANNEL หรือ YOUTUBE_VIDEO_ID ใน .env เพื่อเปิด</div></div>
+            <span class="tag" id="yt-setting-tag">ปิดอยู่</span>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-name">อัตราแปลง เพชร → บาท</div><div class="setting-desc">ใช้ประมาณรายได้ในหน้า Gifts</div></div>
+            <input class="input" id="baht-rate" type="number" step="0.01" min="0" style="width: 110px; text-align: right;" />
+          </div>
+        </section>
 
+        <section class="panel">
+          <h3>วิธีใส่ใน OBS</h3>
+          <p class="lead">ทำครั้งเดียวต่อ widget</p>
+          <ol class="notes">
+            <li>ใน OBS กด <b>+</b> ที่ Sources แล้วเลือก <b>Browser</b> วาง URL จากหน้า Overlay ใส่ Width/Height ตามป้ายมุมขวาบนของการ์ด</li>
+            <li>ติ๊ก <b>Shutdown source when not visible</b> และ <b>Refresh browser when scene becomes active</b></li>
+            <li>ยกเว้น Song request — เป็นแหล่งเสียงจริง อย่าติ๊ก Shutdown ไม่งั้นเพลงหยุดเมื่อสลับ scene</li>
+            <li>ขอเพลงต้องตั้ง <b>YOUTUBE_API_KEY</b> ใน .env และควรปิดเสียงอ่านเองตอนเปิดรับเพลง</li>
+          </ol>
+        </section>
       </div>
+    </section>
 
+  </main>
+</div>
+
+<div class="modal-backdrop" id="preview">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="preview-title"></div>
+        <code class="mono muted" id="preview-url" style="font-size: 12px;"></code>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" class="btn" id="preview-open">เปิดในแท็บใหม่</button>
+        <button type="button" class="btn modal-close" id="preview-close" aria-label="ปิด">
+          <svg class="svg-icon" width="16" height="16" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
     </div>
+    <div class="stage modal-stage"><iframe id="preview-frame" title="Preview"></iframe></div>
   </div>
-</main>
+</div>
 
 <script src="/widgets/shared/shared.js"></script>
 <script>
+  // `rows` are the static sample lines drawn on each card's dark stage.
+  // `demo` marks widgets that accept ?demo=1, so Preview shows sample content
+  // instead of an empty transparent page between live events.
   const OVERLAY_WIDGETS = [
-    { path: "/chat", title: "Chat", icon: "💬", a: "#7c5cff", b: "#22c1c3", desc: "แชท + gift + เข้าห้องไลฟ์ + confetti + เสียงอ่าน" },
-    { path: "/pinned", title: "Pinned", icon: "📌", a: "#ff8a00", b: "#ffd54a", desc: "การ์ดคอมเมนต์ที่ถูกปักหมุด" },
-    { path: "/top-donate", title: "Top Donate", icon: "🏆", a: "#ffd54a", b: "#a259ff", desc: "10 อันดับโดเนทสูงสุด จาก EasyDonate (mock ถ้ายังไม่ตั้ง API key)" },
-    { path: "/follow", title: "Follow Alert", icon: "💜", a: "#b9a8ff", b: "#7c5cff", desc: "การ์ดเด้งแจ้งเตือนผู้ติดตามใหม่ (?theme=, ?seconds=, ?demo=1 ไว้จัดตำแหน่ง)" },
-    { path: "/timer", title: "BRB Timer", icon: "⏱️", a: "#ffd166", b: "#ff8a5c", desc: "นับถอยหลังพักเบรก คุมจาก Panel" },
-    { path: "/summary", title: "Summary", icon: "📊", a: "#22c1c3", b: "#7c5cff", desc: "การ์ดสรุปยอด คอมเมนต์/ของขวัญ/ผู้ชม กดแสดงจาก Panel" },
-    { path: "/music", title: "Music", icon: "🎵", a: "#ff5c8a", b: "#7c5cff", desc: "เล่นเพลงที่คนดูขอผ่านลิงก์ YouTube — อนุมัติทีละเพลงจาก Panel" },
+    { path: "/chat", title: "Chat", desc: "คอมเมนต์สด + gift + คนเข้าห้อง + อ่านออกเสียง", size: "420 × 720",
+      rows: [["มะปราง", "สวัสดีค่าพี่"], ["user451", "เสียงพี่เพราะมาก"], ["ฟ้าใส", "ส่ง Rose ×25", true]] },
+    { path: "/pinned", title: "Pinned comment", desc: "คอมเมนต์ที่ปักหมุดจาก Panel", size: "720 × 160",
+      rows: [["บอสใหญ่", "พรุ่งนี้ไลฟ์กี่โมงครับ"]] },
+    { path: "/top-donate", title: "Top donate", desc: "วน 10 อันดับโดเนทสูงสุดจาก EasyDonate · <code>?seconds=</code> <code>?accent=</code>", size: "450 × 130", demo: true,
+      rows: [["1 PloyPloy", "3,120 ฿", true], ["2 มะปราง", "2,450 ฿"], ["3 Toy Chan", "1,380 ฿"]] },
+    { path: "/follow", title: "Follow alert", desc: "การ์ดเด้งแจ้งเตือนผู้ติดตามใหม่ · <code>?seconds=</code> <code>?accent=</code>", size: "450 × 130", demo: true,
+      rows: [["kiki_88", "เพิ่งติดตาม", true]] },
+    { path: "/timer", title: "BRB Timer", desc: "นับถอยหลังตอนพักเบรก คุมจาก Panel", size: "1920 × 1080",
+      rows: [["05:00", "พักเบรกสักครู่ เดี๋ยวกลับมา"]] },
+    { path: "/summary", title: "Session summary", desc: "สรุปยอดไลฟ์ เมื่อกด “แสดงสรุป” ใน Panel", size: "800 × 450",
+      rows: [["คอมเมนต์", "1,284"], ["Gift", "1,020 · 12,480 เพชร"]] },
+    { path: "/music", title: "Song request", desc: "เล่นเพลงที่คนดูขอ — อนุมัติทีละเพลงจาก Panel", size: "480 × 120",
+      rows: [["กำลังเล่น", "ลาลาลอย — The TOYS"]] },
+    { path: "/ytmusic", title: "Now playing", desc: "เพลงจากแท็บ YouTube Music · ต้องลง <a href=\"/ytmusic.user.js\" target=\"_blank\">userscript</a> ก่อน · <code>?theme=</code> <code>?next=0</code>", size: "480 × 160", demo: true,
+      rows: [["ตอนนี้", "Lover Boy — Phum Viphurit", true]] },
   ];
 
-  const TAB_WIDGETS = [
-    { path: "/panel", title: "Panel", icon: "🎛️", a: "#22c1c3", b: "#7c5cff", desc: "ดูคอมเมนต์สด คลิกเพื่อปักหมุดขึ้นหน้า Pinned, คุม Timer และแสดงสรุป" },
-  ];
+  const icon = {
+    copy: '<svg class="svg-icon" width="14" height="14" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
+    eye: '<svg class="svg-icon" width="15" height="15" viewBox="0 0 24 24"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg>',
+    open: '<svg class="svg-icon" width="15" height="15" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+  };
 
-  function copyText(btn, text) {
-    navigator.clipboard.writeText(text).then(() => {
-      const original = btn.textContent;
-      btn.textContent = "คัดลอกแล้ว ✓";
-      btn.classList.add("copied");
-      setTimeout(() => {
-        btn.textContent = original;
-        btn.classList.remove("copied");
-      }, 1500);
-    });
+  // ---- Base URL: what the copy buttons put on the clipboard. Editable for
+  // when OBS runs on another machine and needs the LAN address instead. ----
+  const baseUrlInput = document.getElementById("base-url");
+  baseUrlInput.value = readSetting("lr-base-url", location.origin);
+  baseUrlInput.addEventListener("input", () => {
+    writeSetting("lr-base-url", baseUrlInput.value.trim());
+    document.querySelectorAll("[data-url-of]").forEach((el) => (el.textContent = widgetUrl(el.dataset.urlOf)));
+  });
+  function widgetUrl(path) {
+    return (baseUrlInput.value.trim() || location.origin).replace(/\/$/, "") + path;
   }
 
   function renderOverlayGrid() {
     const grid = document.getElementById("overlay-grid");
     OVERLAY_WIDGETS.forEach((w) => {
-      const card = document.createElement("div");
+      const card = document.createElement("article");
       card.className = "card";
-      card.style.setProperty("--a", w.a);
-      card.style.setProperty("--b", w.b);
+      const rows = w.rows
+        .map(([name, text, hot]) => `<div class="stage-row${hot ? " hot" : ""}"><b>${name}</b><span>${text}</span></div>`)
+        .join("");
       card.innerHTML = `
-        <div class="top">
-          <div class="icon">${w.icon}</div>
-          <div>
-            <div class="title">${w.title}</div>
-            <div class="path mono">${w.path}</div>
-          </div>
+        <div class="stage">
+          <div class="stage-rows">${rows}</div>
+          <div class="stage-size">${w.size}</div>
         </div>
-        <div class="desc">${w.desc}</div>
-        <div class="row">
-          <button type="button" class="btn" data-open="${w.path}">เปิดดูตัวอย่าง</button>
-          <button type="button" class="btn copy" data-copy="${w.path}">คัดลอกลิงก์</button>
+        <div class="card-body">
+          <div>
+            <div class="card-title">${w.title}</div>
+            <div class="card-desc">${w.desc}</div>
+          </div>
+          <div class="url-pill">
+            <code data-url-of="${w.path}">${widgetUrl(w.path)}</code>
+            <button type="button" class="btn btn-sm btn-primary" data-copy="${w.path}">${icon.copy}<span>Copy</span></button>
+          </div>
+          <div class="card-actions">
+            <button type="button" class="btn" data-preview="${w.path}">${icon.eye}Preview</button>
+            <button type="button" class="btn" data-open="${w.path}">${icon.open}เปิดแท็บใหม่</button>
+          </div>
         </div>
       `;
       grid.appendChild(card);
     });
+    document.getElementById("overlay-count").textContent = `${OVERLAY_WIDGETS.length} widgets`;
   }
-
-  function renderTabGrid() {
-    const grid = document.getElementById("tab-grid");
-    TAB_WIDGETS.forEach((w) => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.style.setProperty("--a", w.a);
-      card.style.setProperty("--b", w.b);
-      card.innerHTML = `
-        <div class="top">
-          <div class="icon">${w.icon}</div>
-          <div>
-            <div class="title">${w.title}</div>
-            <div class="path mono">${w.path}</div>
-          </div>
-        </div>
-        <div class="desc">${w.desc}</div>
-        <div class="row">
-          <button type="button" class="btn" data-open="${w.path}">เปิด Panel</button>
-        </div>
-      `;
-      grid.appendChild(card);
-    });
-  }
-
-  function renderUrlRows() {
-    const rows = document.getElementById("url-rows");
-    OVERLAY_WIDGETS.forEach((w) => {
-      const row = document.createElement("div");
-      row.className = "url-row";
-      row.innerHTML = `
-        <div class="name-col">
-          <div class="name">${w.title}</div>
-          <div class="path mono">${w.path}</div>
-        </div>
-        <div class="url mono">${location.origin}${w.path}</div>
-        <button type="button" class="btn" style="flex: 0 0 auto; padding: 8px 12px;" data-copy="${w.path}">Copy</button>
-      `;
-      rows.appendChild(row);
-    });
-  }
-
   renderOverlayGrid();
-  renderTabGrid();
-  renderUrlRows();
+
+  // ---- preview modal: the real widget page in an iframe on a dark stage ----
+  const previewEl = document.getElementById("preview");
+  const previewFrame = document.getElementById("preview-frame");
+  let previewPath = null;
+  function openPreview(path) {
+    const w = OVERLAY_WIDGETS.find((x) => x.path === path);
+    previewPath = path + (w.demo ? "?demo=1" : "");
+    document.getElementById("preview-title").textContent = w.title;
+    document.getElementById("preview-url").textContent = widgetUrl(path);
+    previewFrame.src = previewPath;
+    previewEl.classList.add("open");
+  }
+  function closePreview() {
+    previewEl.classList.remove("open");
+    previewFrame.src = "about:blank"; // stop its WebSocket / TTS while hidden
+  }
+  previewEl.addEventListener("click", (event) => {
+    if (event.target === previewEl) closePreview();
+  });
+  document.getElementById("preview-close").addEventListener("click", closePreview);
+  document.getElementById("preview-open").addEventListener("click", () => window.open(previewPath, "_blank"));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && previewEl.classList.contains("open")) closePreview();
+  });
 
   document.body.addEventListener("click", (event) => {
+    const previewBtn = event.target.closest("[data-preview]");
+    if (previewBtn) return openPreview(previewBtn.dataset.preview);
     const openBtn = event.target.closest("[data-open]");
-    if (openBtn) {
-      window.open(openBtn.dataset.open, "_blank");
-      return;
-    }
+    if (openBtn) return window.open(openBtn.dataset.open, "_blank");
     const copyBtn = event.target.closest("[data-copy]");
     if (copyBtn) {
-      copyText(copyBtn, location.origin + copyBtn.dataset.copy);
+      navigator.clipboard.writeText(widgetUrl(copyBtn.dataset.copy)).then(() => {
+        const label = copyBtn.querySelector("span");
+        label.textContent = "คัดลอกแล้ว";
+        setTimeout(() => (label.textContent = "Copy"), 1800);
+        showToast("คัดลอก URL แล้ว — วางเป็น Browser source ใน OBS");
+      });
     }
   });
 
-  document.getElementById("copy-all").addEventListener("click", () => {
-    const text = OVERLAY_WIDGETS.map((w) => `${w.title}: ${location.origin}${w.path}`).join("\n");
-    const btn = document.getElementById("copy-all");
-    navigator.clipboard.writeText(text).then(() => {
-      const original = btn.textContent;
-      btn.textContent = "Copied all";
-      btn.classList.add("copied");
-      setTimeout(() => {
-        btn.textContent = original;
-        btn.classList.remove("copied");
-      }, 1500);
-    });
-  });
-
-  // ---- tab switching ----
+  // ---- navigation (last view remembered across reloads) ----
+  const contentEl = document.getElementById("content");
+  function showView(name) {
+    document.querySelectorAll(".nav button[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+    const view = document.getElementById("view-" + name);
+    view.classList.add("active");
+    contentEl.classList.toggle("embedded", view.hasAttribute("data-embed"));
+    // Lazy so the embedded pages don't each hold a WebSocket open until used.
+    const frame = view.querySelector("iframe[data-src]:not([src])");
+    if (frame) frame.src = frame.dataset.src;
+    writeSetting("lr-view", name);
+  }
   document.querySelectorAll(".nav button[data-view]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".nav button[data-view]").forEach((b) => b.classList.toggle("active", b === btn));
-      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-      document.getElementById("view-" + btn.dataset.view).classList.add("active");
-    });
+    btn.addEventListener("click", () => showView(btn.dataset.view));
   });
+  const savedView = readSetting("lr-view", "overlays");
+  if (document.getElementById("view-" + savedView)) showView(savedView);
 
-  // ---- TTS provider switch ----
+  // ---- theme ----
+  const themeLabel = document.getElementById("theme-label");
+  function renderThemeLabel() {
+    themeLabel.textContent = document.documentElement.dataset.theme === "dark" ? "Light mode" : "Dark mode";
+  }
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    renderThemeLabel();
+  });
+  renderThemeLabel();
+
+  // ---- baht rate (read by /gifts through the same localStorage) ----
+  const bahtInput = document.getElementById("baht-rate");
+  bahtInput.value = bahtRate();
+  bahtInput.addEventListener("input", () => writeSetting(BAHT_RATE_KEY, bahtInput.value));
+
+  // ---- TTS settings ----
+  // Every control is optimistic: update the UI immediately, then let the
+  // server's own broadcast (handled below) reconcile it.
   const ttsProviderGroup = document.getElementById("tts-provider");
-  ttsProviderGroup.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      // Optimistic: flip the UI immediately instead of waiting on the
-      // server round-trip, then let the server's own broadcast (below)
-      // reconcile it -- keeps the switch feeling responsive even on a
-      // slow/just-reconnecting WebSocket.
-      renderTtsProviderState(btn.dataset.value);
-      ws.send({ type: "set-tts-provider", provider: btn.dataset.value });
-    });
-  });
-  function renderTtsProviderState(provider) {
-    ttsProviderGroup.dataset.value = provider;
-    ttsProviderGroup.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.value === provider));
-  }
-
-  // ---- TTS on/off switch (was a button on chat.html itself; moved here so
-  // it's controlled from one place instead of per-browser-source) ----
-  const ttsEnabledGroup = document.getElementById("tts-enabled");
-  ttsEnabledGroup.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const enabled = btn.dataset.value === "on";
-      renderTtsEnabledState(enabled);
-      ws.send({ type: "set-tts-enabled", enabled });
-    });
-  });
-  function renderTtsEnabledState(enabled) {
-    const value = enabled ? "on" : "off";
-    ttsEnabledGroup.dataset.value = value;
-    ttsEnabledGroup.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.value === value));
-  }
-
-  // ---- TTS playback speed ----
-  const ttsSpeedGroup = document.getElementById("tts-speed");
-  ttsSpeedGroup.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const speed = Number(btn.dataset.value);
-      renderTtsSpeedState(speed);
-      ws.send({ type: "set-tts-speed", speed });
-    });
-  });
-  function renderTtsSpeedState(speed) {
-    const value = String(speed);
-    ttsSpeedGroup.dataset.value = value;
-    ttsSpeedGroup.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.value === value));
-  }
-
-  // ---- TTS read chance: share of Comments read aloud, picked at random ----
   const ttsReadChanceGroup = document.getElementById("tts-read-chance");
-  ttsReadChanceGroup.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const chance = Number(btn.dataset.value);
-      renderTtsReadChanceState(chance);
-      ws.send({ type: "set-tts-read-chance", chance });
-    });
-  });
-  function renderTtsReadChanceState(chance) {
-    const value = String(chance);
-    ttsReadChanceGroup.dataset.value = value;
-    ttsReadChanceGroup.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.value === value));
-  }
+  const ttsEnabledSwitch = document.getElementById("tts-enabled");
+  const ttsSpeedInput = document.getElementById("tts-speed");
+  const ttsSpeedLabel = document.getElementById("tts-speed-label");
 
-  // ---- session stats summary (on-demand only, no auto-refresh) ----
-  function renderStats(data) {
-    document.getElementById("stat-comments").textContent = data.comments;
-    document.getElementById("stat-gifts").textContent = data.gifts;
-    document.getElementById("stat-diamonds").textContent = data.giftDiamonds.toLocaleString();
-    document.getElementById("stat-viewers").textContent = data.viewers;
-  }
+  bindSeg(ttsProviderGroup, (provider) => ws.send({ type: "set-tts-provider", provider }));
+  bindSeg(ttsReadChanceGroup, (chance) => ws.send({ type: "set-tts-read-chance", chance: Number(chance) }));
 
-  document.getElementById("refresh-stats").addEventListener("click", () => {
-    ws.send({ type: "show-summary" });
+  ttsEnabledSwitch.addEventListener("click", () => {
+    const enabled = !ttsEnabledSwitch.classList.contains("on");
+    ttsEnabledSwitch.classList.toggle("on", enabled);
+    ws.send({ type: "set-tts-enabled", enabled });
   });
 
-  // ---- LIVE badge: reflects the server's actual TikTok room connection,
-  // not just whether this browser tab has a WebSocket open to the server.
-  // A WS drop also reads as offline since we can no longer know the real
-  // TikTok state until it reconnects and the server re-syncs us.
-  const statusPill = document.getElementById("status-pill");
-  const statusLabel = document.getElementById("status-label");
-  const statusDetail = document.getElementById("status-detail");
-  function renderConnection(connected, detail) {
-    statusPill.classList.toggle("connected", connected);
-    statusPill.classList.toggle("offline", !connected);
-    statusLabel.textContent = connected ? "LIVE" : "OFFLINE";
-    statusDetail.textContent = detail || (connected ? "เชื่อมต่อ TikTok แล้ว" : "ยังไม่ได้เชื่อมต่อ TikTok");
+  function renderTtsSpeed(speed) {
+    ttsSpeedInput.value = speed;
+    ttsSpeedLabel.textContent = Number(speed).toFixed(2) + "×";
+  }
+  ttsSpeedInput.addEventListener("input", () => renderTtsSpeed(ttsSpeedInput.value));
+  ttsSpeedInput.addEventListener("change", () => ws.send({ type: "set-tts-speed", speed: Number(ttsSpeedInput.value) }));
+
+  // ---- connection badges: the server's actual TikTok/YouTube connection, not
+  // just whether this tab's WebSocket is open. A WS drop also reads as
+  // offline since we can't know the real state until the server re-syncs. ----
+  function renderPlatform(prefix, connected, label, detail) {
+    const pill = document.getElementById(`${prefix}status-pill`);
+    pill.classList.toggle("connected", connected);
+    document.getElementById(`${prefix}status-label`).textContent = label;
+    document.getElementById(`${prefix}status-detail`).textContent = detail;
+  }
+
+  function renderSettingTag(tagId, detailId, connected, detail) {
+    const tag = document.getElementById(tagId);
+    tag.textContent = connected ? "เชื่อมต่อแล้ว" : "ออฟไลน์";
+    tag.className = "tag " + (connected ? "tag-olive" : "tag-accent");
+    document.getElementById(detailId).textContent = detail;
+  }
+
+  function renderTiktokConnection(connected, detail) {
+    const text = detail || (connected ? "เชื่อมต่อ TikTok แล้ว" : "ยังไม่ได้เชื่อมต่อ TikTok");
+    renderPlatform("", connected, connected ? "TIKTOK LIVE" : "TIKTOK OFFLINE", text);
+    renderSettingTag("tiktok-setting-tag", "tiktok-setting-detail", connected, text);
+  }
+
+  // YouTube's badge shows only when YOUTUBE_CHANNEL or YOUTUBE_VIDEO_ID is set.
+  function renderYoutubeConnection(data) {
+    document.getElementById("yt-status-pill").hidden = !data.enabled;
+    if (!data.enabled) return;
+    renderPlatform("yt-", data.connected, data.connected ? "YOUTUBE LIVE" : "YOUTUBE", data.detail || "");
+    renderSettingTag("yt-setting-tag", "yt-setting-detail", data.connected, data.detail || "");
   }
 
   const ws = connectWS((data) => {
-    if (data.type === "tts-provider-state") renderTtsProviderState(data.provider);
-    if (data.type === "tts-enabled-state") renderTtsEnabledState(data.enabled);
-    if (data.type === "tts-speed-state") renderTtsSpeedState(data.speed);
-    if (data.type === "tts-read-chance-state") renderTtsReadChanceState(data.chance);
-    if (data.type === "summary") renderStats(data);
-    if (data.type === "tiktok-connection-state") renderConnection(data.connected, data.detail);
+    if (data.type === "tts-provider-state") setSegActive(ttsProviderGroup, data.provider);
+    if (data.type === "tts-enabled-state") ttsEnabledSwitch.classList.toggle("on", data.enabled);
+    if (data.type === "tts-speed-state") renderTtsSpeed(data.speed);
+    if (data.type === "tts-read-chance-state") setSegActive(ttsReadChanceGroup, data.chance);
+    if (data.type === "tiktok-connection-state") renderTiktokConnection(data.connected, data.detail);
+    if (data.type === "youtube-connection-state") renderYoutubeConnection(data);
   }, (wsConnected) => {
-    if (!wsConnected) renderConnection(false, "ขาดการเชื่อมต่อ server…");
+    if (!wsConnected) renderTiktokConnection(false, "ขาดการเชื่อมต่อ server…");
   });
 </script>
 </body>

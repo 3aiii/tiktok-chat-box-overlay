@@ -7,3 +7,4 @@ filler-songs.json
 extra-donors.json
 logs/
 donor-aliases.json
+*.stackdump

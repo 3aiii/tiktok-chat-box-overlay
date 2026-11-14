@@ -1,0 +1,7 @@
+/* Kanit, bundled locally (see /fonts) so overlays render Thai the same on any
+   machine. @import this first from each overlay's stylesheet. */
+@font-face { font-family: "Kanit"; src: url("/fonts/Kanit-Regular.ttf") format("truetype"); font-weight: 400; }
+@font-face { font-family: "Kanit"; src: url("/fonts/Kanit-Medium.ttf") format("truetype"); font-weight: 500; }
+@font-face { font-family: "Kanit"; src: url("/fonts/Kanit-SemiBold.ttf") format("truetype"); font-weight: 600; }
+@font-face { font-family: "Kanit"; src: url("/fonts/Kanit-Bold.ttf") format("truetype"); font-weight: 700; }
+@font-face { font-family: "Kanit"; src: url("/fonts/Kanit-ExtraBold.ttf") format("truetype"); font-weight: 800; }

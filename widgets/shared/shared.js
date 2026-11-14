@@ -1,15 +1,13 @@
-// Shared helpers reused across the split overlay widgets (chat, pinned,
-// panel, top-donate). Plain globals on purpose -- no bundler/ES modules in
-// this project, and each widget is a separate OBS/Streamlabs browser source with
-// its own JS context anyway, so there's nothing to share at runtime besides code.
+// Helpers shared by the widget and dashboard pages. Plain globals on purpose:
+// there's no bundler, and each page is its own OBS/browser source anyway.
 
 // Match the WS_PORT set in server.js
 const WS_URL = "ws://localhost:8081";
 
 // Returns a stable { send } wrapper rather than the raw WebSocket, since the
-// underlying socket is replaced on every auto-reconnect -- callers that hold
-// on to the return value (panel.html, to send pin/unpin) would otherwise end
-// up sending on a stale, closed socket after the first disconnect.
+// underlying socket is replaced on every auto-reconnect -- a caller holding on
+// to the return value would otherwise send on a closed socket after the first
+// disconnect.
 // onStatus(connected: boolean), if given, fires on open and on close/error.
 function connectWS(onMessage, onStatus) {
   let socket;
@@ -88,6 +86,17 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// An <img> for a TikTok/YouTube CDN URL. no-referrer matters: the CDNs refuse
+// hotlinked images that send our localhost referrer.
+function createImg(src, className) {
+  const img = document.createElement("img");
+  if (className) img.className = className;
+  img.src = src;
+  img.alt = "";
+  img.referrerPolicy = "no-referrer";
+  return img;
+}
+
 // Real TikTok profile picture only -- no letter-avatar fallback. Returns null
 // when there's no avatarUrl, or removes itself from the DOM if the CDN image
 // fails to load.
@@ -95,24 +104,13 @@ function createAvatar(avatarUrl) {
   if (!avatarUrl) return null;
   const avatar = document.createElement("div");
   avatar.className = "avatar";
-  const img = document.createElement("img");
-  img.src = avatarUrl;
-  img.alt = "";
-  img.referrerPolicy = "no-referrer";
+  const img = createImg(avatarUrl);
   img.onerror = () => avatar.remove();
   avatar.appendChild(img);
   return avatar;
 }
 
-// Small role badge shown next to the avatar (gift/member lines only).
-function createBadge(badgeClass, fallbackEmoji) {
-  const badge = document.createElement("div");
-  badge.className = `badge ${badgeClass}`;
-  badge.textContent = fallbackEmoji;
-  return badge;
-}
-
-function buildLine(extraClass, nickname, avatarUrl, badge) {
+function buildLine(extraClass, nickname, avatarUrl, icon) {
   const line = document.createElement("div");
   line.className = extraClass ? `chat-line ${extraClass}` : "chat-line";
 
@@ -120,7 +118,7 @@ function buildLine(extraClass, nickname, avatarUrl, badge) {
   header.className = "line-header";
   const avatar = createAvatar(avatarUrl);
   if (avatar) header.appendChild(avatar);
-  if (badge) header.appendChild(badge);
+  if (icon) header.appendChild(icon);
   const nick = document.createElement("span");
   nick.className = "nickname";
   nick.textContent = nickname;
@@ -134,8 +132,6 @@ function buildLine(extraClass, nickname, avatarUrl, badge) {
   return { line, bubble };
 }
 
-// container/maxLines passed in (instead of a shared global) so chat.html and
-// events.html can each keep their own #chat-box and cap independently.
 function pushLine(container, line, maxLines) {
   container.prepend(line);
   while (container.children.length > maxLines) {
@@ -144,4 +140,21 @@ function pushLine(container, line, maxLines) {
   // Only fade the top edge once messages actually overflow the box -- otherwise
   // a single early comment gets faded for no reason.
   container.classList.toggle("overflowing", container.scrollHeight > container.clientHeight);
+}
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+// 125000 -> "02:05"
+function formatClock(ms) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  return `${pad2(Math.floor(totalSeconds / 60))}:${pad2(totalSeconds % 60)}`;
+}
+
+// What the BRB clock reads for a server timer-state; running is the only
+// state that changes on its own, so callers re-check it on a tick.
+function timerClockText(state) {
+  if (state.status === "running") return formatClock(state.endsAt - Date.now());
+  if (state.status === "paused") return formatClock(state.remainingMs);
+  if (state.status === "ended") return "00:00";
+  return formatClock(state.durationMs);
 }

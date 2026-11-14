@@ -1,0 +1,105 @@
+@import url("/widgets/shared/kanit.css");
+
+/* Default look (no ?theme=): dark glass + orange accent (Mini bar design, recoloured).
+   ?theme=<name> overrides these via applyTheme() in shared/themes.js. */
+:root {
+  --bg: rgba(12, 13, 18, 0.86);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #F2F3F7;
+  --sub: #A3A7B5;
+  --accent: #FF8A3D;
+  --chip-bg: #2B2F3D;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: "Kanit", "Segoe UI", "Sarabun", sans-serif;
+  overflow: hidden;
+}
+
+#widget { width: 400px; margin: 24px; }
+
+#pill {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  height: 80px;
+  padding: 10px 20px 10px 10px;
+  border-radius: 40px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+#pill.show { display: flex; }
+#pill.swap #meta { animation: swap-in 0.45s cubic-bezier(0.2, 0.8, 0.3, 1); }
+@keyframes swap-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Album art spins like a record; a dark centre hole keeps it reading as a disc. */
+#disc {
+  position: relative;
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--accent);
+  background: var(--chip-bg);
+  animation: spin 6s linear infinite;
+}
+#disc img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#disc.empty img { display: none; }
+#hole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #0C0D12;
+  border: 2px solid var(--accent);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#title, #artist, #next { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#title { font-weight: 700; font-size: 16px; line-height: 1.25; color: var(--text); }
+/* Long titles scroll (see layoutTitle in ytmusic.js) instead of truncating;
+   the edges fade so text slides in and out rather than being cut off. */
+#title.scrolling {
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8px, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8px, #000 calc(100% - 16px), transparent);
+}
+.marquee-track { display: inline-flex; will-change: transform; }
+.marquee-track span { padding-right: 48px; }
+#artist { font-weight: 500; font-size: 12.5px; color: var(--sub); }
+#next { display: none; font-weight: 400; font-size: 11.5px; color: var(--sub); }
+#next.show { display: block; }
+#next-label { color: var(--accent); font-weight: 600; }
+
+#eq { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 3px; height: 16px; }
+#eq span {
+  display: block;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: bottom;
+  animation: eq 0.9s ease-in-out infinite;
+}
+#eq span:nth-child(2) { animation-delay: -0.3s; animation-duration: 0.7s; }
+#eq span:nth-child(3) { animation-delay: -0.6s; animation-duration: 1.1s; }
+@keyframes eq { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+
+/* Paused: the record stops and the bars settle. */
+#pill.paused #disc { animation-play-state: paused; }
+#pill.paused #eq span { animation: none; transform: scaleY(0.3); opacity: 0.6; }

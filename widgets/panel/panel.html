@@ -2,123 +2,169 @@
 <html lang="th">
 <head>
 <meta charset="utf-8" />
-<title>Pin Control Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Panel</title>
+<script src="/widgets/shared/dashboard-theme.js"></script>
+<link rel="stylesheet" href="/widgets/shared/dashboard.css" />
 <link rel="stylesheet" href="/widgets/panel/panel.css" />
 </head>
 <body>
-  <header>
-    <h1>Pin Control Panel</h1>
-    <p>คลิกคอมเมนต์เพื่อปักหมุดขึ้นหน้า /pinned — คลิกซ้ำเพื่อเลิกปักหมุด</p>
-    <div class="controls">
-      <div class="search-box">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
-        </svg>
-        <input id="search" type="text" placeholder="ค้นหาคอมเมนต์หรือชื่อ…" />
-      </div>
-      <div class="segmented" id="auto-unpin" data-value="30000">
-        <span class="seg-label">auto-unpin</span>
-        <button type="button" data-value="0">ปิด</button>
-        <button type="button" data-value="15000">15s</button>
-        <button type="button" data-value="30000" class="active">30s</button>
-        <button type="button" data-value="60000">60s</button>
-      </div>
-      <button type="button" class="summary-btn" id="show-summary">📊 แสดงสรุป</button>
+<main>
+  <header class="page-head">
+    <div>
+      <h1>Panel</h1>
+      <p>ปักหมุดคอมเมนต์ คุม TTS, BRB timer และคิวขอเพลง</p>
     </div>
+    <button type="button" class="btn btn-heading" id="show-summary">แสดงสรุปบน /summary</button>
   </header>
-  <section id="timer-panel">
-    <div class="timer-panel-head">
-      <h2>BRB Timer</h2>
-      <div class="timer-readout" id="timer-readout">05:00</div>
-    </div>
-    <div class="timer-controls">
-      <div class="segmented" id="timer-presets">
-        <span class="seg-label">เริ่มด่วน</span>
-        <button type="button" data-ms="60000">1m</button>
-        <button type="button" data-ms="300000">5m</button>
-        <button type="button" data-ms="600000">10m</button>
-        <button type="button" data-ms="900000">15m</button>
-      </div>
-      <div class="timer-custom">
-        <input id="timer-min" type="number" min="0" max="99" value="5" />
-        <span>นาที</span>
-        <input id="timer-sec" type="number" min="0" max="59" value="0" />
-        <span>วินาที</span>
-        <button type="button" class="timer-btn primary" id="timer-start">▶ เริ่ม</button>
-      </div>
-      <div class="timer-message-row">
-        <input id="timer-message" type="text" placeholder="ข้อความ BRB…" value="พักเบรกสักครู่ เดี๋ยวกลับมา" />
-        <button type="button" class="timer-btn" id="timer-pause">⏸ พัก</button>
-        <button type="button" class="timer-btn" id="timer-resume">▶ เล่นต่อ</button>
-        <button type="button" class="timer-btn" id="timer-reset">↺ รีเซ็ต</button>
-      </div>
-    </div>
-  </section>
-  <section id="song-panel">
-    <div class="song-panel-head">
-      <h2>ขอเพลง</h2>
-      <div class="segmented" id="song-enabled" data-value="off">
-        <span class="seg-label">รับ request</span>
-        <button type="button" data-value="on">เปิด</button>
-        <button type="button" data-value="off" class="active">ปิด</button>
-      </div>
-    </div>
 
-    <div id="song-nokey" class="song-warn">ยังไม่ได้ตั้ง YOUTUBE_API_KEY ใน .env — feature นี้จะไม่ทำงาน</div>
-
-    <div id="song-now">
-      <span class="song-now-dot"></span>
-      <span class="song-now-text"><b id="song-now-title"></b> <span id="song-now-by"></span></span>
-      <button type="button" class="timer-btn" id="song-skip">⏭ ข้าม</button>
-      <button type="button" class="timer-btn" id="song-stop">⏹ หยุด</button>
-    </div>
-
-    <div id="song-idle">
-      <span class="song-idle-text">ไม่มีเพลงเล่นอยู่</span>
-      <button type="button" class="timer-btn primary" id="song-start">▶ เริ่มเล่น</button>
-    </div>
-
-    <div class="song-cols">
-      <div class="song-col">
-        <div class="song-col-head">รออนุมัติ <span id="song-pending-count">0</span></div>
-        <div id="song-pending"></div>
-        <div class="song-col-empty" id="song-pending-empty">ยังไม่มีใครขอเพลง</div>
+  <div class="layout">
+    <!-- ============ Pin comment ============ -->
+    <section class="panel">
+      <div>
+        <h3>Pin comment</h3>
+        <p class="panel-sub">คลิกคอมเมนต์เพื่อปักหมุดขึ้น /pinned — คลิกซ้ำเพื่อเลิก</p>
       </div>
-      <div class="song-col">
-        <div class="song-col-head">อนุมัติแล้ว <span id="song-approved-count">0</span></div>
-        <div id="song-approved"></div>
-        <div class="song-col-empty" id="song-approved-empty">คิวว่าง</div>
+      <div class="controls">
+        <label class="search-box">
+          <svg class="svg-icon" width="15" height="15" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="search" type="text" placeholder="ค้นหาคอมเมนต์หรือชื่อ…" />
+        </label>
+        <div class="seg" id="auto-unpin">
+          <span class="seg-label">auto-unpin</span>
+          <button type="button" data-value="0">ปิด</button>
+          <button type="button" data-value="15000">15s</button>
+          <button type="button" data-value="30000" class="active">30s</button>
+          <button type="button" data-value="60000">60s</button>
+        </div>
       </div>
-    </div>
+      <div id="pinned-bar">
+        <svg class="svg-icon" width="16" height="16" viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+        <span class="text"><b id="pinned-bar-nick"></b> <span id="pinned-bar-comment"></span></span>
+        <span id="pinned-bar-auto" class="mono"></span>
+        <button type="button" class="btn btn-sm btn-primary" id="pinned-bar-clear">เลิกปักหมุด</button>
+      </div>
+      <div id="list-wrap">
+        <div id="list"></div>
+        <div id="empty"><span id="empty-text">รอคอมเมนต์เข้ามา…</span></div>
+      </div>
+    </section>
 
-    <div class="song-filler">
-      <div class="song-col-head">Filler — เล่นตอนคิวว่าง <span id="song-filler-count">0</span></div>
-      <div class="song-filler-add">
-        <input id="filler-link" type="text" placeholder="วางลิงก์ YouTube เพื่อเพิ่มเป็น Filler…" />
-        <button type="button" class="timer-btn primary" id="filler-add">+ เพิ่ม</button>
-      </div>
-      <div id="filler-error" class="song-warn"></div>
-      <div id="filler-list"></div>
-      <div class="song-col-empty" id="filler-empty">ยังไม่มี Filler — คิวว่างแล้วจะเงียบ</div>
+    <div class="stack">
+      <!-- ============ TTS ============ -->
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>TTS</h3>
+            <p id="tts-status">—</p>
+          </div>
+          <button type="button" class="switch lg" id="tts-enabled" aria-label="เปิด/ปิดเสียงอ่าน"><span></span></button>
+        </div>
+        <div class="row">
+          <span class="row-label">ความเร็ว</span>
+          <div class="seg" id="tts-speed">
+            <button type="button" data-value="1">1.0×</button>
+            <button type="button" data-value="1.25">1.25×</button>
+            <button type="button" data-value="1.5">1.5×</button>
+            <button type="button" data-value="2">2.0×</button>
+          </div>
+        </div>
+        <div class="row">
+          <span class="row-label">Engine</span>
+          <div class="seg" id="tts-provider">
+            <button type="button" data-value="local">Local</button>
+            <button type="button" data-value="google">Google</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ BRB Timer ============ -->
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>BRB Timer</h3>
+            <p id="timer-status">พร้อมเริ่ม · แสดงบน /timer</p>
+          </div>
+          <div class="timer-readout" id="timer-readout">05:00</div>
+        </div>
+        <div class="controls">
+          <div class="seg" id="timer-presets">
+            <span class="seg-label">เริ่มด่วน</span>
+            <button type="button" data-ms="60000">1m</button>
+            <button type="button" data-ms="300000">5m</button>
+            <button type="button" data-ms="600000">10m</button>
+            <button type="button" data-ms="900000">15m</button>
+          </div>
+          <div class="timer-custom">
+            <input class="input" id="timer-min" type="number" min="0" max="99" value="5" />นาที
+            <input class="input" id="timer-sec" type="number" min="0" max="59" value="0" />วินาที
+          </div>
+        </div>
+        <input class="input" id="timer-message" type="text" placeholder="ข้อความ BRB…" value="พักเบรกสักครู่ เดี๋ยวกลับมา" />
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary btn-heading" id="timer-start">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>เริ่ม
+          </button>
+          <button type="button" class="btn" id="timer-pause">พัก</button>
+          <button type="button" class="btn" id="timer-resume">เล่นต่อ</button>
+          <button type="button" class="btn" id="timer-reset">รีเซ็ต</button>
+        </div>
+      </section>
+
+      <!-- ============ Song request ============ -->
+      <section class="panel">
+        <div class="panel-head">
+          <h3>ขอเพลง</h3>
+          <div class="seg" id="song-enabled">
+            <span class="seg-label">รับ request</span>
+            <button type="button" data-value="on">เปิด</button>
+            <button type="button" data-value="off" class="active">ปิด</button>
+          </div>
+        </div>
+
+        <div id="song-nokey" class="song-warn">ยังไม่ได้ตั้ง YOUTUBE_API_KEY ใน .env — feature นี้จะไม่ทำงาน</div>
+
+        <div id="song-now">
+          <span class="song-now-dot"></span>
+          <span class="song-now-text"><b id="song-now-title"></b> · <span id="song-now-by"></span></span>
+          <button type="button" class="btn btn-sm btn-olive" id="song-skip">ข้าม</button>
+          <button type="button" class="btn btn-sm" id="song-stop">หยุด</button>
+        </div>
+
+        <div id="song-idle">
+          <span>ไม่มีเพลงเล่นอยู่</span>
+          <button type="button" class="btn btn-sm btn-primary" id="song-start">เริ่มเล่น</button>
+        </div>
+
+        <div class="song-cols">
+          <div class="song-col">
+            <div class="song-col-head">รออนุมัติ <span class="count count-accent" id="song-pending-count">0</span></div>
+            <div id="song-pending"></div>
+            <div class="song-col-empty" id="song-pending-empty">ยังไม่มีใครขอเพลง</div>
+          </div>
+          <div class="song-col">
+            <div class="song-col-head">อนุมัติแล้ว <span class="count count-olive" id="song-approved-count">0</span></div>
+            <div id="song-approved"></div>
+            <div class="song-col-empty" id="song-approved-empty">คิวว่าง — จะเล่น Filler</div>
+          </div>
+        </div>
+
+        <div class="song-filler">
+          <div class="song-col-head">Filler — เล่นตอนคิวว่าง · <span id="filler-list-count">0</span></div>
+          <div class="song-filler-add">
+            <input class="input" id="filler-link" type="text" placeholder="วางลิงก์ YouTube เพื่อเพิ่มเป็น Filler…" />
+            <button type="button" class="btn btn-primary" id="filler-add">+ เพิ่ม</button>
+          </div>
+          <div id="filler-error" class="song-warn"></div>
+          <div id="filler-list"></div>
+          <div class="song-col-empty" id="filler-list-empty">ยังไม่มี Filler — คิวว่างแล้วจะเงียบ</div>
+        </div>
+      </section>
     </div>
-  </section>
-  <div id="pinned-bar">
-    <span class="pin-dot"></span>
-    <span class="text"><b id="pinned-bar-nick"></b> <span id="pinned-bar-comment"></span></span>
-    <span id="pinned-bar-auto" class="auto-flag"></span>
-    <button class="clear-btn" id="pinned-bar-clear">เลิกปักหมุด</button>
   </div>
-  <div id="list-wrap">
-    <div id="list"></div>
-    <div id="empty">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      </svg>
-      <span id="empty-text">รอคอมเมนต์เข้ามา…</span>
-    </div>
-  </div>
+</main>
 
-  <script src="/widgets/shared/shared.js"></script>
-  <script src="/widgets/panel/panel.js"></script>
+<script src="/widgets/shared/shared.js"></script>
+<script src="/widgets/panel/panel.js"></script>
 </body>
 </html>

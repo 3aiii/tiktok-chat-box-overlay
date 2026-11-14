@@ -7,17 +7,13 @@ const pinnedBarNick = document.getElementById("pinned-bar-nick");
 const pinnedBarComment = document.getElementById("pinned-bar-comment");
 const pinnedBarAuto = document.getElementById("pinned-bar-auto");
 const searchInput = document.getElementById("search");
-const autoUnpinGroup = document.getElementById("auto-unpin");
 let pinnedRow = null;
+let autoUnpinMs = 30000;
 let autoUnpinTimer = null;
+let pinCountdown = null;
 let ws = null;
 
-autoUnpinGroup.querySelectorAll("button").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    autoUnpinGroup.dataset.value = btn.dataset.value;
-    autoUnpinGroup.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btn));
-  });
-});
+bindSeg(document.getElementById("auto-unpin"), (ms) => (autoUnpinMs = Number(ms)));
 
 // Case-insensitive substring match against nickname/comment. Applied both
 // on every keystroke and to each newly arriving row so live chat keeps
@@ -25,10 +21,7 @@ autoUnpinGroup.querySelectorAll("button").forEach((btn) => {
 function matchesSearch(row) {
   const q = searchInput.value.trim().toLowerCase();
   if (!q) return true;
-  return (
-    row.dataset.nickname.toLowerCase().includes(q) ||
-    row.dataset.comment.toLowerCase().includes(q)
-  );
+  return row.dataset.nickname.toLowerCase().includes(q) || row.dataset.comment.toLowerCase().includes(q);
 }
 
 function applyFilter() {
@@ -38,12 +31,11 @@ function applyFilter() {
     row.style.display = visible ? "" : "none";
     if (visible) visibleCount++;
   });
-  const hasRows = listEl.children.length > 0;
-  if (!hasRows) {
+  if (!listEl.children.length) {
     emptyTextEl.textContent = "รอคอมเมนต์เข้ามา…";
     emptyEl.style.display = "flex";
   } else if (visibleCount === 0) {
-    emptyTextEl.textContent = "ไม่พบคอมเมนต์ที่ตรงกับคำค้น";
+    emptyTextEl.textContent = `ไม่พบคอมเมนต์ที่ตรงกับ “${searchInput.value.trim()}”`;
     emptyEl.style.display = "flex";
   } else {
     emptyEl.style.display = "none";
@@ -52,45 +44,36 @@ function applyFilter() {
 
 searchInput.addEventListener("input", applyFilter);
 
-function addRow(nickname, comment, avatarUrl) {
-  const row = document.createElement("div");
-  row.className = "row";
+// tag: optional { label, className } shown between the name and the text
+// (GIFT for gifts, YT for YouTube comments).
+function addRow(nickname, comment, avatarUrl, tag) {
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "row-comment";
   row.dataset.nickname = nickname;
   row.dataset.comment = comment;
   row.dataset.avatarUrl = avatarUrl || "";
 
-  const avatar = document.createElement("div");
-  avatar.className = "avatar";
-  if (avatarUrl) {
-    const img = document.createElement("img");
-    img.src = avatarUrl;
-    img.alt = "";
-    img.referrerPolicy = "no-referrer";
-    img.onerror = () => img.remove();
-    avatar.appendChild(img);
-  }
+  const now = new Date();
+  const time = document.createElement("span");
+  time.className = "row-time";
+  time.textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
 
-  const text = document.createElement("div");
-  text.className = "text";
-  const nick = document.createElement("div");
-  nick.className = "nickname";
+  const body = document.createElement("span");
+  body.className = "row-body";
+  const nick = document.createElement("b");
   nick.textContent = nickname;
-  const body = document.createElement("div");
-  body.className = "comment";
-  body.textContent = comment;
-  text.appendChild(nick);
-  text.appendChild(body);
+  body.appendChild(nick);
+  if (tag) {
+    const tagEl = document.createElement("span");
+    tagEl.className = `tag ${tag.className}`;
+    tagEl.textContent = tag.label;
+    body.appendChild(tagEl);
+  }
+  body.appendChild(document.createTextNode(comment));
 
-  const flag = document.createElement("span");
-  flag.className = "pin-flag";
-  flag.textContent = "📌 pinned";
-  flag.style.display = "none";
-
-  row.appendChild(avatar);
-  row.appendChild(text);
-  row.appendChild(flag);
-
-  row.addEventListener("click", () => togglePin(row, flag));
+  row.append(time, body);
+  row.addEventListener("click", () => togglePin(row));
 
   listEl.prepend(row);
   while (listEl.children.length > MAX_ROWS) {
@@ -101,73 +84,106 @@ function addRow(nickname, comment, avatarUrl) {
   applyFilter();
 }
 
-function togglePin(row, flag) {
+function togglePin(row) {
   if (row === pinnedRow) {
     unpin();
     return;
   }
 
-  if (pinnedRow) {
-    pinnedRow.classList.remove("pinned");
-    pinnedRow.querySelector(".pin-flag").style.display = "none";
-  }
+  if (pinnedRow) pinnedRow.classList.remove("pinned");
   row.classList.add("pinned");
-  flag.style.display = "inline";
   pinnedRow = row;
   pinnedBarNick.textContent = row.dataset.nickname;
   pinnedBarComment.textContent = row.dataset.comment;
   pinnedBar.classList.add("show");
 
-  const autoMs = Number(autoUnpinGroup.dataset.value);
   ws.send({
     type: "pin",
     nickname: row.dataset.nickname,
     comment: row.dataset.comment,
     avatarUrl: row.dataset.avatarUrl,
-    autoUnpinMs: autoMs,
+    autoUnpinMs,
   });
 
   clearTimeout(autoUnpinTimer);
-  if (autoMs > 0) {
-    pinnedBarAuto.textContent = `⏱ auto ${autoMs / 1000}s`;
-    pinnedBarAuto.style.display = "inline";
-    autoUnpinTimer = setTimeout(unpin, autoMs);
+  clearInterval(pinCountdown);
+  if (autoUnpinMs > 0) {
+    const endsAt = Date.now() + autoUnpinMs;
+    const tick = () => (pinnedBarAuto.textContent = formatClock(endsAt - Date.now()));
+    tick();
+    pinCountdown = setInterval(tick, 250);
+    autoUnpinTimer = setTimeout(unpin, autoUnpinMs);
   } else {
-    pinnedBarAuto.style.display = "none";
+    pinnedBarAuto.textContent = "ค้างไว้";
   }
 }
 
 function unpin() {
   clearTimeout(autoUnpinTimer);
+  clearInterval(pinCountdown);
   if (pinnedRow) {
     pinnedRow.classList.remove("pinned");
-    pinnedRow.querySelector(".pin-flag").style.display = "none";
     pinnedRow = null;
   }
   pinnedBar.classList.remove("show");
   ws.send({ type: "unpin" });
 }
 
-pinnedBar.querySelector("#pinned-bar-clear").addEventListener("click", unpin);
+document.getElementById("pinned-bar-clear").addEventListener("click", unpin);
 
 document.getElementById("show-summary").addEventListener("click", () => {
   ws.send({ type: "show-summary" });
+  showToast("ส่ง Session summary ขึ้น /summary แล้ว");
 });
+
+// ---- TTS controls (same server state as the Control Room's Settings) ----
+// Optimistic like the Control Room: update now, the server's broadcast reconciles.
+const ttsEnabledSwitch = document.getElementById("tts-enabled");
+const ttsSpeedGroup = document.getElementById("tts-speed");
+const ttsProviderGroup = document.getElementById("tts-provider");
+const ttsStatusEl = document.getElementById("tts-status");
+const ttsState = { enabled: true, provider: "local", speed: 1.5 };
+
+function renderTts() {
+  ttsEnabledSwitch.classList.toggle("on", ttsState.enabled);
+  setSegActive(ttsSpeedGroup, ttsState.speed);
+  setSegActive(ttsProviderGroup, ttsState.provider);
+  const engine = ttsState.provider === "google" ? "Google Translate" : "Local engine";
+  ttsStatusEl.textContent = ttsState.enabled
+    ? `กำลังอ่าน · ${engine} · ${ttsState.speed.toFixed(2)}×`
+    : "ปิดเสียงอ่านทั้งหมด";
+}
+
+function setTts(change, message) {
+  Object.assign(ttsState, change);
+  renderTts();
+  ws.send(message);
+}
+
+ttsEnabledSwitch.addEventListener("click", () => {
+  const enabled = !ttsState.enabled;
+  setTts({ enabled }, { type: "set-tts-enabled", enabled });
+});
+bindSeg(ttsSpeedGroup, (value) => {
+  const speed = Number(value);
+  setTts({ speed }, { type: "set-tts-speed", speed });
+});
+bindSeg(ttsProviderGroup, (provider) => setTts({ provider }, { type: "set-tts-provider", provider }));
 
 // ---- BRB Timer controls ----
 const timerReadout = document.getElementById("timer-readout");
-const timerPresets = document.getElementById("timer-presets");
+const timerStatusEl = document.getElementById("timer-status");
 const timerMinInput = document.getElementById("timer-min");
 const timerSecInput = document.getElementById("timer-sec");
 const timerMessageInput = document.getElementById("timer-message");
 let timerTickInterval = null;
 
-function formatMs(ms) {
-  const totalSeconds = Math.max(0, Math.round(ms / 1000));
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
+const TIMER_STATUS = {
+  idle: "พร้อมเริ่ม · แสดงบน /timer",
+  running: "กำลังนับถอยหลังบน /timer",
+  paused: "หยุดชั่วคราว",
+  ended: "หมดเวลา — กลับมาไลฟ์ได้เลย",
+};
 
 function customDurationMs() {
   const min = Number(timerMinInput.value) || 0;
@@ -175,7 +191,7 @@ function customDurationMs() {
   return (min * 60 + sec) * 1000;
 }
 
-timerPresets.querySelectorAll("button").forEach((btn) => {
+document.querySelectorAll("#timer-presets button").forEach((btn) => {
   btn.addEventListener("click", () => {
     const ms = Number(btn.dataset.ms);
     timerMinInput.value = Math.floor(ms / 60000);
@@ -187,38 +203,25 @@ timerPresets.querySelectorAll("button").forEach((btn) => {
 document.getElementById("timer-start").addEventListener("click", () => {
   ws.send({ type: "timer-start", durationMs: customDurationMs() });
 });
-document.getElementById("timer-pause").addEventListener("click", () => {
-  ws.send({ type: "timer-pause" });
-});
-document.getElementById("timer-resume").addEventListener("click", () => {
-  ws.send({ type: "timer-resume" });
-});
-document.getElementById("timer-reset").addEventListener("click", () => {
-  ws.send({ type: "timer-reset" });
-});
+document.getElementById("timer-pause").addEventListener("click", () => ws.send({ type: "timer-pause" }));
+document.getElementById("timer-resume").addEventListener("click", () => ws.send({ type: "timer-resume" }));
+document.getElementById("timer-reset").addEventListener("click", () => ws.send({ type: "timer-reset" }));
 timerMessageInput.addEventListener("change", () => {
   ws.send({ type: "timer-set-message", message: timerMessageInput.value });
 });
 
 function renderTimerState(state) {
-  clearInterval(timerTickInterval);
-  timerTickInterval = null;
-
   if (document.activeElement !== timerMessageInput) {
     timerMessageInput.value = state.message;
   }
+  timerStatusEl.textContent = TIMER_STATUS[state.status] || "";
+  timerReadout.classList.toggle("running", state.status === "running");
+  timerReadout.classList.toggle("ended", state.status === "ended");
 
-  if (state.status === "running") {
-    const render = () => (timerReadout.textContent = formatMs(state.endsAt - Date.now()));
-    render();
-    timerTickInterval = setInterval(render, 250);
-  } else if (state.status === "paused") {
-    timerReadout.textContent = formatMs(state.remainingMs);
-  } else if (state.status === "ended") {
-    timerReadout.textContent = "00:00";
-  } else {
-    timerReadout.textContent = formatMs(state.durationMs);
-  }
+  clearInterval(timerTickInterval);
+  const draw = () => (timerReadout.textContent = timerClockText(state));
+  draw();
+  if (state.status === "running") timerTickInterval = setInterval(draw, 250);
 }
 
 // ---- Song request controls ----
@@ -228,23 +231,10 @@ const songNowEl = document.getElementById("song-now");
 const songIdleEl = document.getElementById("song-idle");
 const songNowTitle = document.getElementById("song-now-title");
 const songNowBy = document.getElementById("song-now-by");
-const songPendingEl = document.getElementById("song-pending");
-const songPendingEmpty = document.getElementById("song-pending-empty");
-const songPendingCount = document.getElementById("song-pending-count");
-const songApprovedEl = document.getElementById("song-approved");
-const songApprovedEmpty = document.getElementById("song-approved-empty");
-const songApprovedCount = document.getElementById("song-approved-count");
 const fillerLinkInput = document.getElementById("filler-link");
 const fillerErrorEl = document.getElementById("filler-error");
-const fillerListEl = document.getElementById("filler-list");
-const fillerEmptyEl = document.getElementById("filler-empty");
-const fillerCountEl = document.getElementById("song-filler-count");
 
-songEnabledGroup.querySelectorAll("button").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    ws.send({ type: "set-song-enabled", enabled: btn.dataset.value === "on" });
-  });
-});
+bindSeg(songEnabledGroup, (value) => ws.send({ type: "set-song-enabled", enabled: value === "on" }));
 
 document.getElementById("song-start").addEventListener("click", () => ws.send({ type: "song-start" }));
 document.getElementById("song-skip").addEventListener("click", () => ws.send({ type: "song-skip" }));
@@ -263,13 +253,11 @@ fillerLinkInput.addEventListener("keydown", (event) => {
 });
 
 function formatDuration(sec) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
+  return `${Math.floor(sec / 60)}:${pad2(sec % 60)}`;
 }
 
-// One row shape for all three lists -- they differ only in which buttons hang
-// off the end, so the buttons are passed in rather than branched on here.
+// One row shape for all three lists -- they differ only in the subtitle (none
+// for fillers) and which buttons hang off the end.
 function songRow(song, subtitle, buttons) {
   const row = document.createElement("div");
   row.className = "song-row";
@@ -279,99 +267,92 @@ function songRow(song, subtitle, buttons) {
   const title = document.createElement("div");
   title.className = "song-row-title";
   title.textContent = song.title;
-  const sub = document.createElement("div");
-  sub.className = "song-row-sub";
-  sub.textContent = `${subtitle} · ${formatDuration(song.durationSec)}`;
   text.appendChild(title);
-  text.appendChild(sub);
+  if (subtitle) {
+    const sub = document.createElement("div");
+    sub.className = "song-row-sub";
+    sub.textContent = `${subtitle} · ${formatDuration(song.durationSec)}`;
+    text.appendChild(sub);
+  }
   row.appendChild(text);
 
+  const btns = document.createElement("div");
+  btns.className = "song-row-btns";
   buttons.forEach(({ label, className, onClick }) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `song-row-btn ${className}`;
+    btn.className = `btn btn-sm ${className}`;
     btn.textContent = label;
     btn.addEventListener("click", onClick);
-    row.appendChild(btn);
+    btns.appendChild(btn);
   });
+  row.appendChild(btns);
   return row;
 }
 
+// Fills one song list (pending / approved / fillers) plus its count and empty note.
+function renderSongList(name, songs, subtitleOf, buttonsOf) {
+  document.getElementById(`${name}-count`).textContent = songs.length;
+  document.getElementById(`${name}-empty`).style.display = songs.length ? "none" : "block";
+  document.getElementById(name).replaceChildren(...songs.map((song) => songRow(song, subtitleOf(song), buttonsOf(song))));
+}
+
+const send = (message) => () => ws.send(message);
+
 function renderSongState(state) {
   songNoKeyEl.style.display = state.hasApiKey ? "none" : "block";
-
-  const value = state.enabled ? "on" : "off";
-  songEnabledGroup.dataset.value = value;
-  songEnabledGroup.querySelectorAll("button").forEach((b) => {
-    b.classList.toggle("active", b.dataset.value === value);
-  });
+  setSegActive(songEnabledGroup, state.enabled ? "on" : "off");
 
   if (state.nowPlaying) {
-    songNowEl.classList.add("show");
     songNowTitle.textContent = state.nowPlaying.title;
-    songNowBy.textContent = state.nowPlaying.isFiller
-      ? "(Filler)"
-      : `— ขอโดย ${state.nowPlaying.nickname}`;
-  } else {
-    songNowEl.classList.remove("show");
+    songNowBy.textContent = state.nowPlaying.isFiller ? "Filler" : state.nowPlaying.nickname;
   }
+  songNowEl.classList.toggle("show", Boolean(state.nowPlaying));
 
   // Nothing plays on its own, so offer an explicit start -- but only when there
   // is actually something for it to play.
   const canStart = !state.nowPlaying && (state.approved.length > 0 || state.fillers.length > 0);
   songIdleEl.classList.toggle("show", canStart);
 
-  songPendingCount.textContent = state.pending.length;
-  songPendingEmpty.style.display = state.pending.length === 0 ? "block" : "none";
-  songPendingEl.textContent = "";
-  state.pending.forEach((song) => {
-    songPendingEl.appendChild(
-      songRow(song, song.nickname, [
-        { label: "✓", className: "ok", onClick: () => ws.send({ type: "song-approve", id: song.id }) },
-        { label: "✕", className: "no", onClick: () => ws.send({ type: "song-reject", id: song.id }) },
-      ])
-    );
-  });
-
-  songApprovedCount.textContent = state.approved.length;
-  songApprovedEmpty.style.display = state.approved.length === 0 ? "block" : "none";
-  songApprovedEl.textContent = "";
-  state.approved.forEach((song) => {
-    songApprovedEl.appendChild(
-      songRow(song, song.nickname, [
-        { label: "✕", className: "no", onClick: () => ws.send({ type: "song-reject", id: song.id }) },
-      ])
-    );
-  });
-
-  fillerCountEl.textContent = state.fillers.length;
-  fillerEmptyEl.style.display = state.fillers.length === 0 ? "block" : "none";
-  fillerListEl.textContent = "";
-  state.fillers.forEach((song) => {
-    fillerListEl.appendChild(
-      songRow(song, song.channel || "Filler", [
-        { label: "✕", className: "no", onClick: () => ws.send({ type: "filler-remove", id: song.id }) },
-      ])
-    );
-  });
+  renderSongList("song-pending", state.pending, (song) => song.nickname, (song) => [
+    { label: "อนุมัติ", className: "btn-primary", onClick: send({ type: "song-approve", id: song.id }) },
+    { label: "ปฏิเสธ", className: "", onClick: send({ type: "song-reject", id: song.id }) },
+  ]);
+  renderSongList("song-approved", state.approved, (song) => song.nickname, (song) => [
+    { label: "เอาออก", className: "", onClick: send({ type: "song-reject", id: song.id }) },
+  ]);
+  renderSongList("filler-list", state.fillers, () => null, (song) => [
+    { label: "ลบ", className: "", onClick: send({ type: "filler-remove", id: song.id }) },
+  ]);
 }
 
-const setWsStatus = attachStatusIndicator();
-
 ws = connectWS((data) => {
-  if (data.type === "timer-state") {
-    renderTimerState(data);
-    return;
+  switch (data.type) {
+    case "timer-state":
+      return renderTimerState(data);
+    case "song-state":
+      return renderSongState(data);
+    case "filler-add-failed":
+      fillerErrorEl.textContent = data.reason;
+      fillerErrorEl.style.display = "block";
+      return;
+    case "tts-enabled-state":
+      ttsState.enabled = data.enabled;
+      return renderTts();
+    case "tts-speed-state":
+      ttsState.speed = Number(data.speed);
+      return renderTts();
+    case "tts-provider-state":
+      ttsState.provider = data.provider;
+      return renderTts();
+    case "gift":
+      return addRow(data.nickname, `ส่ง ${data.giftName} ×${data.repeatCount || 1}`, data.avatarUrl, {
+        label: "GIFT",
+        className: "tag-accent",
+      });
+    case "chat":
+      return addRow(data.nickname, data.comment, data.avatarUrl, data.platform === "youtube" ? { label: "YT", className: "tag-olive" } : null);
   }
-  if (data.type === "song-state") {
-    renderSongState(data);
-    return;
-  }
-  if (data.type === "filler-add-failed") {
-    fillerErrorEl.textContent = data.reason;
-    fillerErrorEl.style.display = "block";
-    return;
-  }
-  if (data.type !== "chat") return;
-  addRow(data.nickname, data.comment, data.avatarUrl);
-}, setWsStatus);
+}, attachStatusIndicator());
+
+renderTts();

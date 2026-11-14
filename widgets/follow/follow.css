@@ -1,17 +1,14 @@
-@font-face {
-  font-family: "Kanit";
-  src: url("/fonts/Kanit-Medium.ttf") format("truetype");
-  font-weight: 500;
-}
-@font-face {
-  font-family: "Kanit";
-  src: url("/fonts/Kanit-SemiBold.ttf") format("truetype");
-  font-weight: 600;
-}
-@font-face {
-  font-family: "Kanit";
-  src: url("/fonts/Kanit-Bold.ttf") format("truetype");
-  font-weight: 700;
+@import url("/widgets/shared/kanit.css");
+
+/* --accent / --accent-line / --accent-glow are overridable via ?accent=RRGGBB (set in JS). */
+:root {
+  --accent: #FF8A3D;
+  --accent-soft: #FFC88F;
+  --accent-line: rgba(255, 138, 61, 0.4);
+  --accent-glow: rgba(255, 138, 61, 0.28);
+  --heart: #FF4D6D;
+  --text: #F2F3F7;
+  --sub: #C9B8A8;
 }
 
 * { box-sizing: border-box; }
@@ -24,243 +21,143 @@ html, body {
   overflow: hidden;
 }
 
-/* Theme colors (--bg, --solid, --light, --accent, --rgb, ...) are set on
-   :root by follow.js (?theme=...). Every animated value is written as an
-   inline style per frame by follow.js; this file only holds the static look. */
-#stage {
-  width: 480px;
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+/* Padding leaves room for the confetti and waves that fly outside the pill. */
+#stage { padding: 40px; color: var(--text); }
 
-#card {
+/* ---------- pill: pop in as a circle, stretch out, shrink back, pop out ---------- */
+#pill {
   position: relative;
-  width: 420px;
-  height: 104px;
-  border-radius: 20px;
+  height: 80px;
+  width: 80px;
+  border-radius: 40px;
+  background: rgba(16, 13, 11, 0.9);
+  border: 1px solid var(--accent-line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 24px var(--accent-glow);
+  transform-origin: 40px 40px;
+  transform: scale(0);
   opacity: 0;
-  box-shadow: 0 16px 34px rgba(24, 18, 48, 0.34), 0 0 34px rgba(var(--rgb), var(--glow, 0.14));
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease, width 0.7s cubic-bezier(0.34, 1.25, 0.64, 1);
 }
+.p-enter #pill { transform: scale(1); opacity: 1; }
+.p-open #pill, .p-show #pill, .p-leave #pill { transform: scale(1); opacity: 1; width: 440px; }
+.p-close #pill { transform: scale(1); opacity: 1; width: 80px; transition: width 0.45s cubic-bezier(0.55, 0, 0.75, 0); }
+.p-gone #pill { transform: scale(0); opacity: 0; transition: transform 0.35s ease-in, opacity 0.3s ease 0.1s; }
 
-.card-bg {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: 20px;
-  background: var(--bg);
-  backdrop-filter: blur(14px);
-}
-
-#halo {
-  position: absolute;
-  left: -46px;
-  top: -48px;
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--rgb), 0.38), rgba(var(--rgb), 0) 68%);
-}
-
-#shine {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -60%;
-  width: 40%;
-  pointer-events: none;
-  transform: skewX(-20deg);
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0));
-}
-
-.bar-track {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  background: rgba(var(--rgb), 0.14);
-}
-#bar {
-  height: 3px;
-  width: 100%;
-  border-radius: 0 2px 2px 0;
-  background: linear-gradient(90deg, var(--accent), var(--light));
-}
-
-.row {
-  position: absolute;
-  inset: 0;
-  padding: 0 22px 0 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-/* ---- avatar ---- */
-.avatar-wrap {
-  position: relative;
-  flex-shrink: 0;
-  width: 62px;
-  height: 62px;
-}
-.wave {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  opacity: 0;
-  box-shadow: 0 0 0 2px var(--light);
-}
-.wave-2 { box-shadow: 0 0 0 1.5px var(--accent); }
-
-#confetti span {
-  position: absolute;
-  left: 31px;
-  top: 31px;
-  display: block;
-  border-radius: 2px;
+/* ---------- light sweep ---------- */
+#sweep-clip { position: absolute; inset: 0; border-radius: 40px; overflow: hidden; pointer-events: none; }
+#sweep {
+  position: absolute; top: -10px; bottom: -10px; left: 0; width: 70px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 214, 170, 0.32), rgba(255, 255, 255, 0));
   opacity: 0;
 }
+.p-show #sweep { opacity: 1; animation: sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) 0.5s both; }
+@keyframes sweep {
+  0% { transform: translateX(-140px) skewX(-20deg); }
+  100% { transform: translateX(560px) skewX(-20deg); }
+}
 
-#avatar {
-  position: absolute;
-  inset: 0;
-}
-#ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-}
-.ring-gap {
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--solid);
-}
-.avatar-face {
-  position: absolute;
-  inset: 6px;
+/* ---------- avatar ---------- */
+#avatar-wrap { position: absolute; left: 10px; top: 10px; width: 60px; height: 60px; }
+
+#ring-svg { position: absolute; inset: 0; width: 60px; height: 60px; transform: rotate(-90deg); }
+#ring { stroke: var(--accent); stroke-dashoffset: 176; transition: stroke-dashoffset 0.9s cubic-bezier(0.6, 0, 0.2, 1); }
+.p-open #ring, .p-show #ring, .p-leave #ring { stroke-dashoffset: 0; }
+
+#face {
+  position: absolute; left: 7px; top: 7px; width: 46px; height: 46px;
   border-radius: 50%;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(140deg, var(--light), var(--accent));
+  background: linear-gradient(145deg, var(--accent-soft), var(--accent));
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.25);
+  display: flex; align-items: center; justify-content: center;
+  transform: scale(0.4);
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s;
 }
-.gloss {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  top: 3px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
-}
-#initial {
-  position: relative;
-  font-size: 23px;
-  font-weight: 700;
-  color: #FFFFFF;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-/* Real TikTok avatar on top of the initial; hidden until it loads so a
-   broken/missing URL just leaves the design's initial fallback. */
-#avatar-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: none;
-}
-#avatar-img.loaded { display: block; }
+.p-enter #face, .p-open #face, .p-show #face, .p-leave #face, .p-close #face { transform: scale(1); }
+#initial { font-size: 20px; font-weight: 700; line-height: 1; color: #2A1606; }
+#avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s ease; }
+#avatar-img.loaded { opacity: 1; }
 
 #plus {
-  position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  background: #FFFFFF;
-  box-shadow: 0 0 0 2.5px var(--solid), 0 3px 8px rgba(var(--rgb), 0.55);
+  position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--heart); border: 2px solid #100D0B;
+  display: flex; align-items: center; justify-content: center;
+  transform: scale(0) rotate(-90deg);
+  transition: transform 0.5s cubic-bezier(0.34, 1.8, 0.64, 1);
 }
-#plus svg { stroke: var(--accent); }
+#plus svg { width: 10px; height: 10px; }
+.p-show #plus, .p-leave #plus { transform: scale(1) rotate(0); transition-delay: 0.15s; }
 
-/* ---- text ---- */
-.text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+/* shockwaves */
+.wv { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; }
+.wv.w2 { border-color: var(--accent-soft); }
+.p-show .wv { animation: wave 1s cubic-bezier(0.1, 0.6, 0.3, 1) both; }
+.p-show .wv.w2 { animation-delay: 0.22s; }
+@keyframes wave {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.4); opacity: 0; }
 }
-#sub {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+
+/* confetti (pieces created by JS with --x --y --r --dl) */
+#confetti { position: absolute; left: 30px; top: 30px; width: 0; height: 0; }
+#confetti span { position: absolute; opacity: 0; }
+.p-show #confetti span { animation: burst 1.2s cubic-bezier(0.1, 0.8, 0.3, 1) both; animation-delay: var(--dl); }
+@keyframes burst {
+  0% { transform: translate(0, 0) rotate(0) scale(0.4); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(1); opacity: 0; }
 }
-#spark path { fill: var(--light); }
-#sub span {
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: 0.06em;
-  color: var(--label);
-  text-shadow: var(--ts);
-}
-#name {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.25;
-  white-space: nowrap;
+
+/* ---------- text ---------- */
+#text {
+  position: absolute; left: 84px; right: 120px; top: 0; bottom: 0;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--text);
 }
-#thanks {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: var(--sub);
-  text-shadow: var(--ts);
+#label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--accent); white-space: nowrap; }
+#label svg { width: 10px; height: 10px; fill: var(--accent); }
+#name { font-size: 18px; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+/* Only while the letters are visible -- otherwise a long name's "…" sits alone
+   mid-pill before the letters rise in and after they fade out. */
+.p-show #name { text-overflow: ellipsis; }
+#thanks { font-size: 12px; font-weight: 400; color: var(--sub); white-space: nowrap; }
+
+.txt { opacity: 0; transform: translateX(-14px); filter: blur(4px); }
+.p-show .txt { opacity: 1; transform: none; filter: blur(0); transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.2, 0.8, 0.3, 1), filter 0.5s ease; }
+.p-show .t1 { transition-delay: 0.05s; }
+.p-show .t3 { transition-delay: 0.55s; }
+.p-leave .txt { opacity: 0; transform: translateY(-8px); filter: blur(3px); transition: all 0.28s ease-in; }
+
+/* name: one span per grapheme, each with its own --d delay */
+.ch { display: inline-block; opacity: 0; transform: translateY(14px) rotate(10deg); filter: blur(4px); }
+.p-show .ch { opacity: 1; transform: none; filter: blur(0); transition: opacity 0.4s ease, transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.4s ease; transition-delay: var(--d); }
+.p-leave .ch { opacity: 0; transition: opacity 0.25s ease; }
+
+/* ---------- Follow chip ---------- */
+#chip {
+  position: absolute; right: 14px; top: 22px; height: 36px;
+  padding: 0 14px 0 10px; border-radius: 18px;
+  background: var(--accent); color: #2A1606;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 700;
+  opacity: 0; transform: scale(0.5) translateX(20px);
+}
+.p-show #chip { opacity: 1; transform: none; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s, opacity 0.3s ease 0.35s; }
+.p-leave #chip { opacity: 0; transform: scale(0.8); transition: all 0.25s ease-in; }
+#beat { width: 16px; height: 16px; fill: var(--heart); }
+.p-show #beat { animation: beat 1.1s ease-in-out 0.9s infinite; }
+@keyframes beat {
+  0%, 100% { transform: scale(1); }
+  15% { transform: scale(1.28); }
+  30% { transform: scale(1); }
+  45% { transform: scale(1.16); }
 }
 
-/* ---- follow chip ---- */
-#chip {
-  position: relative;
-  flex-shrink: 0;
-}
-#hearts svg {
-  position: absolute;
-  left: 22px;
-  top: 0;
-  overflow: visible;
-  opacity: 0;
-}
-.chip-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px 0 11px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(var(--rgb), 0.32), rgba(var(--rgb), 0.12));
-  box-shadow: inset 0 0 0 1px rgba(var(--rgb), 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-#beat {
-  filter: drop-shadow(0 0 4px rgba(var(--rgb), 0.8));
-}
-#beat path { fill: var(--light); }
-.chip-pill span {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--chip-fg);
-  letter-spacing: 0.02em;
-  text-shadow: var(--ts);
+#hearts { position: absolute; left: 18px; top: 0; width: 0; height: 0; }
+#hearts svg { position: absolute; left: -6px; top: -4px; opacity: 0; }
+.p-show #hearts svg { animation: floatup 1.8s ease-out infinite; animation-delay: var(--hd); }
+@keyframes floatup {
+  0% { transform: translate(0, 0) scale(0.4); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translate(var(--hx), -46px) scale(1); opacity: 0; }
 }

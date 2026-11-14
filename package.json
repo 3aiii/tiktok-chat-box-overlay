@@ -7,12 +7,14 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test-song-requests.js",
-    "trace": "node trace-live-log.js"
+    "trace": "node trace-live-log.js",
+    "seed:gifts": "node seed-mock-gifts.js"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
     "dotenv": "^17.4.2",
     "tiktok-live-connector": "^2.5.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "youtubei.js": "^18.3.0"
   }
 }

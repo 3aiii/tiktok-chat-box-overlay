@@ -1,4 +1,4 @@
-// Card color themes shared by the overlay cards (top-donate, timer).
+// Card color themes shared by the overlay cards (timer, ytmusic).
 // Pick one with ?theme=<name>; defaults to midnight.
 const THEMES = {
   midnight: { bg: "rgba(37, 34, 47, 0.8)", border: "rgba(255, 255, 255, 0.07)", text: "#FFFFFF", sub: "#A39DB8", baht: "#B9A8FF", accent: "#7C5CFF", chipBg: "rgba(255, 255, 255, 0.1)", chipFg: "#FFFFFF" },
@@ -10,7 +10,7 @@ const THEMES = {
 };
 
 // Writes the chosen theme's colors as CSS variables on :root.
-function applyTheme(name) {
+function applyCardTheme(name) {
   const theme = THEMES[name] || THEMES.midnight;
   const rootStyle = document.documentElement.style;
   rootStyle.setProperty("--bg", theme.bg);

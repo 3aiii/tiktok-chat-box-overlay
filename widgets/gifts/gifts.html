@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gifts</title>
+<script src="/widgets/shared/dashboard-theme.js"></script>
+<link rel="stylesheet" href="/widgets/shared/dashboard.css" />
+<link rel="stylesheet" href="/widgets/gifts/gifts.css" />
+</head>
+<body>
+<main>
+  <header class="page-head">
+    <div>
+      <h1>Gifts</h1>
+      <p id="range-label">—</p>
+    </div>
+    <div class="head-actions">
+      <div class="seg" id="range">
+        <button type="button" data-value="today" class="active">วันนี้</button>
+        <button type="button" data-value="yesterday">เมื่อวาน</button>
+        <button type="button" data-value="7d">7 วัน</button>
+        <button type="button" data-value="30d">30 วัน</button>
+      </div>
+      <button type="button" class="btn btn-primary btn-heading" id="export">
+        <svg class="svg-icon" width="16" height="16" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Export CSV
+      </button>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat stat-accent">
+      <div class="stat-label">เพชรทั้งหมด</div>
+      <div class="stat-value" id="stat-diamonds">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">≈ รายได้ (บาท)</div>
+      <div class="stat-value" id="stat-baht">฿0</div>
+      <div class="stat-note" id="stat-baht-note"></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">จำนวน Gift</div>
+      <div class="stat-value" id="stat-count">0</div>
+    </div>
+    <div class="stat stat-olive">
+      <div class="stat-label">ผู้ให้ Gift</div>
+      <div class="stat-value" id="stat-gifters">0 คน</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <div class="panel-title-row">
+        <h3>เพชรตามเวลา</h3>
+        <span class="muted small" id="axis-label">รายชั่วโมง</span>
+      </div>
+      <div class="bars" id="bars"></div>
+    </section>
+    <section class="panel">
+      <h3>แยกตามประเภท Gift</h3>
+      <div class="types" id="types"></div>
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h3>Top gifters</h3>
+      <div id="top"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-title-row">
+        <h3>รายการล่าสุด</h3>
+        <span class="live-flag" id="live-flag"><span></span>live</span>
+      </div>
+      <div id="recent"></div>
+    </section>
+  </div>
+</main>
+
+<script src="/widgets/shared/shared.js"></script>
+<script src="/widgets/gifts/gifts.js"></script>
+</body>
+</html>

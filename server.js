@@ -8,11 +8,17 @@ const fs = require('fs');
 const { URL } = require('url');
 const { startYouTubeChat } = require('./youtube-chat');
 const { createDonations } = require('./donations');
+const { createRequestGuard, cleanCommand } = require('./request-guard');
 
 const TIKTOK_USERNAME = process.env.TIKTOK_USERNAME || 'your_tiktok_username';
 const WS_PORT = process.env.WS_PORT || 8081;
 const HTTP_PORT = process.env.HTTP_PORT || 8080;
 const MOCK_MODE = process.env.MOCK === '1';
+// The address both servers listen on. 127.0.0.1 keeps them to this PC; set
+// BIND_HOST=0.0.0.0 only to open the Panel from another device on the LAN --
+// then anyone on that network can use it too (see request-guard.js).
+const BIND_HOST = (process.env.BIND_HOST || '127.0.0.1').trim();
+const guard = createRequestGuard({ bindHost: BIND_HOST, httpPort: HTTP_PORT });
 const EASYDONATE_API_KEY = process.env.EASYDONATE_API_KEY || '';
 
 // Self-hosted TTS engine (tts-engine-project, POST /v1/tts, {text, lang} ->
@@ -687,6 +693,11 @@ function handleYtMusicUpdate(req, res) {
     res.end('Method not allowed');
     return;
   }
+  if (!/^application\/json\b/i.test(req.headers['content-type'] || '')) {
+    res.writeHead(415);
+    res.end('Expected application/json');
+    return;
+  }
   let body = '';
   let tooLarge = false;
   req.on('data', (chunk) => {
@@ -812,6 +823,11 @@ function serveFile(res, filePath) {
 }
 
 const httpServer = http.createServer((req, res) => {
+  if (!guard.isAllowedHost(req.headers.host)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
   const reqUrl = new URL(req.url, `http://localhost:${HTTP_PORT}`);
 
   if (reqUrl.pathname === '/api/gift-events') {
@@ -851,7 +867,7 @@ const httpServer = http.createServer((req, res) => {
   }
 
   if (reqUrl.pathname === '/tts') {
-    const text = reqUrl.searchParams.get('text') || '';
+    const text = (reqUrl.searchParams.get('text') || '').slice(0, 500);
     if (!text) {
       res.writeHead(400);
       res.end('Missing text param');
@@ -892,12 +908,23 @@ const httpServer = http.createServer((req, res) => {
   res.writeHead(404);
   res.end('Not found');
 });
-httpServer.listen(HTTP_PORT, () => {
-  console.log(`Overlay page: http://localhost:${HTTP_PORT}`);
+httpServer.listen(HTTP_PORT, BIND_HOST, () => {
+  console.log(`Overlay page: http://localhost:${HTTP_PORT}${BIND_HOST === '127.0.0.1' ? '' : ` (listening on ${BIND_HOST})`}`);
 });
 
-// Broadcast chat events to any connected overlay pages
-const wss = new WebSocketServer({ port: WS_PORT });
+// Broadcast chat events to any connected overlay pages. Only pages this
+// server served may connect (see request-guard.js), and no single message
+// may be larger than the biggest command a page legitimately sends.
+const wss = new WebSocketServer({
+  host: BIND_HOST,
+  port: WS_PORT,
+  maxPayload: 64 * 1024,
+  verifyClient: ({ req }) => {
+    const ok = guard.isAllowedHost(req.headers.host) && guard.isAllowedOrigin(req.headers.origin, req.headers.host);
+    if (!ok) liveLog('ws-client', { event: 'refused', origin: req.headers.origin || '', host: req.headers.host || '' });
+    return ok;
+  },
+});
 console.log(`WebSocket server listening on ws://localhost:${WS_PORT}`);
 
 // Gift history: every Gift appended to logs/gifts-YYYY-MM-DD.jsonl (local
@@ -1136,138 +1163,153 @@ wss.on('connection', (ws) => {
   const clientId = nextClientId++;
   liveLog('ws-client', { clientId, event: 'connected', total: wss.clients.size });
   ws.on('close', () => liveLog('ws-client', { clientId, event: 'closed', total: wss.clients.size }));
+  // A message over maxPayload or a malformed frame errors the socket. ws
+  // closes it on its own, but an 'error' with no listener crashes the server.
+  ws.on('error', (err) => liveLog('ws-client', { clientId, event: 'error', error: err.message }));
 
   STATE_PAYLOADS.forEach((payload) => ws.send(JSON.stringify(payload())));
 
   ws.on('message', (raw) => {
     let message;
     try {
-      message = JSON.parse(raw);
+      message = cleanCommand(JSON.parse(raw));
     } catch {
       return;
     }
-    if (message.type === 'overlay-log') {
-      // Reports from overlay pages (rendered / handler error / page hello);
-      // logged only, never rebroadcast.
-      const { type, ...report } = message;
-      liveLog('overlay', { clientId, ...report });
-    } else if (message.type === 'pin' || message.type === 'unpin') {
-      broadcast(message);
-    } else if (message.type === 'show-summary') {
-      broadcast(buildSummaryPayload());
-    } else if (message.type === 'timer-start') {
-      timerState.durationMs = message.durationMs;
-      timerState.endsAt = Date.now() + message.durationMs;
-      timerState.remainingMs = null;
-      timerState.status = 'running';
-      broadcast(timerStatePayload());
-    } else if (message.type === 'timer-pause') {
-      if (timerState.status !== 'running') return;
-      timerState.remainingMs = timerState.endsAt - Date.now();
-      timerState.endsAt = null;
-      timerState.status = 'paused';
-      broadcast(timerStatePayload());
-    } else if (message.type === 'timer-resume') {
-      if (timerState.status !== 'paused') return;
-      timerState.endsAt = Date.now() + timerState.remainingMs;
-      timerState.remainingMs = null;
-      timerState.status = 'running';
-      broadcast(timerStatePayload());
-    } else if (message.type === 'timer-reset') {
-      timerState.status = 'idle';
-      timerState.endsAt = null;
-      timerState.remainingMs = null;
-      broadcast(timerStatePayload());
-    } else if (message.type === 'timer-set-message') {
-      timerState.message = message.message;
-      broadcast(timerStatePayload());
-    } else if (message.type === 'set-song-enabled') {
-      songState.enabled = !!message.enabled;
-      // Turning the feature off clears what is waiting but leaves whatever is
-      // playing alone -- cutting the audio mid-track would be the more
-      // surprising behaviour of the two.
-      if (!songState.enabled) {
-        songState.pending = [];
-        songState.approved = [];
-      }
-      broadcast(songStatePayload());
-    } else if (message.type === 'song-approve') {
-      const index = songState.pending.findIndex((s) => s.id === message.id);
-      if (index === -1) return;
-      const [song] = songState.pending.splice(index, 1);
-      songState.approved.push(song);
-      // Nothing playing means this one starts now rather than waiting for an
-      // end-of-song event that will never arrive.
-      if (!songState.nowPlaying) {
-        advanceSong();
-      } else {
-        broadcast(songStatePayload());
-      }
-    } else if (message.type === 'song-reject') {
-      // Covers both lists: the panel offers the same remove button on a song
-      // waiting for approval and on one already approved but not yet played.
-      const pendingIndex = songState.pending.findIndex((s) => s.id === message.id);
-      if (pendingIndex !== -1) {
-        songState.pending.splice(pendingIndex, 1);
-      } else {
-        const approvedIndex = songState.approved.findIndex((s) => s.id === message.id);
-        if (approvedIndex === -1) return;
-        songState.approved.splice(approvedIndex, 1);
-      }
-      broadcast(songStatePayload());
-    } else if (message.type === 'song-start') {
-      // Distinct from song-skip even though both land on advanceSong: nothing
-      // ever starts playing on its own, so the first song of a session needs an
-      // explicit start. Guarded on idle so a mis-click can't cut a live track.
-      if (songState.nowPlaying) return;
-      advanceSong();
-    } else if (message.type === 'song-skip') {
-      advanceSong();
-    } else if (message.type === 'song-stop') {
-      songState.nowPlaying = null;
-      broadcast(songStatePayload());
-    } else if (message.type === 'song-ended') {
-      // Sent by the /music widget when the player reports ENDED. Guarded on the
-      // id so a stale widget (one that reconnected after we already moved on)
-      // cannot skip the song that is currently playing.
-      if (!songState.nowPlaying || songState.nowPlaying.id !== message.id) return;
-      advanceSong();
-    } else if (message.type === 'song-error') {
-      if (!songState.nowPlaying || songState.nowPlaying.id !== message.id) return;
-      console.error(`[song] player error on ${songState.nowPlaying.videoId}, skipping`);
-      advanceSong();
-    } else if (message.type === 'filler-add') {
-      addFillerSong(message.link).then((result) => {
-        if (!result.ok) {
-          ws.send(JSON.stringify({ type: 'filler-add-failed', reason: result.reason }));
-        }
-      });
-    } else if (message.type === 'filler-remove') {
-      const next = fillerSongs.filter((f) => f.id !== message.id);
-      if (next.length === fillerSongs.length) return;
-      fillerSongs = next;
-      saveFillerSongs();
-      broadcast(songStatePayload());
-    } else if (message.type === 'set-tts-provider') {
-      if (message.provider !== 'local' && message.provider !== 'google') return;
-      ttsProvider = message.provider;
-      broadcast({ type: 'tts-provider-state', provider: ttsProvider });
-    } else if (message.type === 'set-tts-enabled') {
-      ttsEnabled = !!message.enabled;
-      broadcast({ type: 'tts-enabled-state', enabled: ttsEnabled });
-    } else if (message.type === 'set-tts-speed') {
-      const speed = Number(message.speed);
-      if (!Number.isFinite(speed) || speed < 0.5 || speed > 3) return;
-      ttsSpeed = speed;
-      broadcast({ type: 'tts-speed-state', speed: ttsSpeed });
-    } else if (message.type === 'set-tts-read-chance') {
-      const chance = Number(message.chance);
-      if (!Number.isFinite(chance) || chance < 0 || chance > 1) return;
-      ttsReadChance = chance;
-      broadcast({ type: 'tts-read-chance-state', chance: ttsReadChance });
+    if (!message) return;
+    try {
+      handleCommand(ws, clientId, message);
+    } catch (err) {
+      console.error(`[ws] ${message.type} handler threw:`, err.stack || err.message);
+      liveLog('error', { where: 'ws-command', type: message.type, error: err.message });
     }
   });
 });
+
+// One page's command, already checked by cleanCommand (request-guard.js), so
+// every field here has the type and range it should.
+function handleCommand(ws, clientId, message) {
+  if (message.type === 'overlay-log') {
+    // Reports from overlay pages (rendered / handler error / page hello);
+    // logged only, never rebroadcast.
+    const { type, ...report } = message;
+    liveLog('overlay', { clientId, ...report });
+  } else if (message.type === 'pin' || message.type === 'unpin') {
+    broadcast(message);
+  } else if (message.type === 'show-summary') {
+    broadcast(buildSummaryPayload());
+  } else if (message.type === 'timer-start') {
+    timerState.durationMs = message.durationMs;
+    timerState.endsAt = Date.now() + message.durationMs;
+    timerState.remainingMs = null;
+    timerState.status = 'running';
+    broadcast(timerStatePayload());
+  } else if (message.type === 'timer-pause') {
+    if (timerState.status !== 'running') return;
+    timerState.remainingMs = timerState.endsAt - Date.now();
+    timerState.endsAt = null;
+    timerState.status = 'paused';
+    broadcast(timerStatePayload());
+  } else if (message.type === 'timer-resume') {
+    if (timerState.status !== 'paused') return;
+    timerState.endsAt = Date.now() + timerState.remainingMs;
+    timerState.remainingMs = null;
+    timerState.status = 'running';
+    broadcast(timerStatePayload());
+  } else if (message.type === 'timer-reset') {
+    timerState.status = 'idle';
+    timerState.endsAt = null;
+    timerState.remainingMs = null;
+    broadcast(timerStatePayload());
+  } else if (message.type === 'timer-set-message') {
+    timerState.message = message.message;
+    broadcast(timerStatePayload());
+  } else if (message.type === 'set-song-enabled') {
+    songState.enabled = !!message.enabled;
+    // Turning the feature off clears what is waiting but leaves whatever is
+    // playing alone -- cutting the audio mid-track would be the more
+    // surprising behaviour of the two.
+    if (!songState.enabled) {
+      songState.pending = [];
+      songState.approved = [];
+    }
+    broadcast(songStatePayload());
+  } else if (message.type === 'song-approve') {
+    const index = songState.pending.findIndex((s) => s.id === message.id);
+    if (index === -1) return;
+    const [song] = songState.pending.splice(index, 1);
+    songState.approved.push(song);
+    // Nothing playing means this one starts now rather than waiting for an
+    // end-of-song event that will never arrive.
+    if (!songState.nowPlaying) {
+      advanceSong();
+    } else {
+      broadcast(songStatePayload());
+    }
+  } else if (message.type === 'song-reject') {
+    // Covers both lists: the panel offers the same remove button on a song
+    // waiting for approval and on one already approved but not yet played.
+    const pendingIndex = songState.pending.findIndex((s) => s.id === message.id);
+    if (pendingIndex !== -1) {
+      songState.pending.splice(pendingIndex, 1);
+    } else {
+      const approvedIndex = songState.approved.findIndex((s) => s.id === message.id);
+      if (approvedIndex === -1) return;
+      songState.approved.splice(approvedIndex, 1);
+    }
+    broadcast(songStatePayload());
+  } else if (message.type === 'song-start') {
+    // Distinct from song-skip even though both land on advanceSong: nothing
+    // ever starts playing on its own, so the first song of a session needs an
+    // explicit start. Guarded on idle so a mis-click can't cut a live track.
+    if (songState.nowPlaying) return;
+    advanceSong();
+  } else if (message.type === 'song-skip') {
+    advanceSong();
+  } else if (message.type === 'song-stop') {
+    songState.nowPlaying = null;
+    broadcast(songStatePayload());
+  } else if (message.type === 'song-ended') {
+    // Sent by the /music widget when the player reports ENDED. Guarded on the
+    // id so a stale widget (one that reconnected after we already moved on)
+    // cannot skip the song that is currently playing.
+    if (!songState.nowPlaying || songState.nowPlaying.id !== message.id) return;
+    advanceSong();
+  } else if (message.type === 'song-error') {
+    if (!songState.nowPlaying || songState.nowPlaying.id !== message.id) return;
+    console.error(`[song] player error on ${songState.nowPlaying.videoId}, skipping`);
+    advanceSong();
+  } else if (message.type === 'filler-add') {
+    addFillerSong(message.link).then((result) => {
+      if (!result.ok) {
+        ws.send(JSON.stringify({ type: 'filler-add-failed', reason: result.reason }));
+      }
+    });
+  } else if (message.type === 'filler-remove') {
+    const next = fillerSongs.filter((f) => f.id !== message.id);
+    if (next.length === fillerSongs.length) return;
+    fillerSongs = next;
+    saveFillerSongs();
+    broadcast(songStatePayload());
+  } else if (message.type === 'set-tts-provider') {
+    if (message.provider !== 'local' && message.provider !== 'google') return;
+    ttsProvider = message.provider;
+    broadcast({ type: 'tts-provider-state', provider: ttsProvider });
+  } else if (message.type === 'set-tts-enabled') {
+    ttsEnabled = !!message.enabled;
+    broadcast({ type: 'tts-enabled-state', enabled: ttsEnabled });
+  } else if (message.type === 'set-tts-speed') {
+    const speed = Number(message.speed);
+    if (!Number.isFinite(speed) || speed < 0.5 || speed > 3) return;
+    ttsSpeed = speed;
+    broadcast({ type: 'tts-speed-state', speed: ttsSpeed });
+  } else if (message.type === 'set-tts-read-chance') {
+    const chance = Number(message.chance);
+    if (!Number.isFinite(chance) || chance < 0 || chance > 1) return;
+    ttsReadChance = chance;
+    broadcast({ type: 'tts-read-chance-state', chance: ttsReadChance });
+  }
+}
 
 // Every Comment, from either platform, goes through here so the profanity
 // filter, chat overlay, TTS and song requests treat TikTok and YouTube alike.

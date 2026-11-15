@@ -79,6 +79,18 @@ Things that look like bugs but aren't:
 - Nothing changed after an edit: refresh the page (or the browser source in OBS).
 - `/chat` also speaks through your speakers. Turn TTS off in the Panel if you'd rather it didn't.
 
+## Who can reach the server
+
+Both servers listen on `127.0.0.1`, so only this PC can open the overlays and the Panel. The Panel has
+no login, so it also refuses:
+
+- a request whose `Host` isn't this machine (a domain pointed at 127.0.0.1)
+- a WebSocket from any page it didn't serve itself (another website open in the same browser)
+- commands with the wrong shape (each is checked field by field in `request-guard.js`)
+
+To use the Panel from a phone on the same Wi-Fi, set `BIND_HOST=0.0.0.0` in `.env` -- anyone on that
+network can then use it too. Turn it back off after the stream.
+
 ## Use with OBS/Streamlabs
 
 1. Run `npm start` and leave it running.

@@ -122,15 +122,118 @@ function isAlphanumericGibberish(text) {
   return digits / compact.length >= GIBBERISH_DIGIT_RATIO;
 }
 
-function celebrateGift() {
+// Gift tiers, by the coins of the whole Gift streak: tier 1 is a plain line
+// in the chat, tiers 2 and 3 are a card in the same list (see addGiftCard).
+// Query string: ?mid= coins for tier 2 (default 100), ?big= for tier 3 (1000).
+const pageParams = new URLSearchParams(location.search);
+const coinsParam = (key, fallback) => {
+  const value = Number(pageParams.get(key));
+  return pageParams.has(key) && Number.isFinite(value) && value >= 0 ? value : fallback;
+};
+const GIFT_MID_COINS = coinsParam("mid", 100);
+const GIFT_BIG_COINS = Math.max(GIFT_MID_COINS, coinsParam("big", 1000));
+const giftTier = (coins) => (coins >= GIFT_BIG_COINS ? 3 : coins >= GIFT_MID_COINS ? 2 : 1);
+
+// How long a tier 2 / tier 3 Gift card keeps its moving effects (sweep,
+// wobble, rays) before settling into a still card. Twenty of them animating
+// forever would cost a browser source for nothing.
+const GIFT_LIVE_MS = { 2: 5000, 3: 8000 };
+const GIFT_LABEL = { 2: "BIG GIFT · ของขวัญชิ้นใหญ่", 3: "MEGA GIFT · ของขวัญสุดพิเศษ" };
+
+// Tier 1: a small burst from the chat's corner. Tiers 2 and 3: from the Gift
+// picture on the card (`sourceEl`), so it reads as coming out of it.
+function celebrateGift(tier, sourceEl) {
   if (typeof confetti !== "function") return;
-  confetti({
-    particleCount: 60,
-    spread: 65,
-    startVelocity: 45,
-    origin: { x: 0.15, y: 0.85 },
-    colors: ["#ffd54a", "#ff8a5c", "#ff5b7a", "#7c5cff"],
-  });
+  if (tier === 1 || !sourceEl) {
+    confetti({
+      particleCount: 30,
+      spread: 60,
+      startVelocity: 38,
+      origin: { x: 0.15, y: 0.85 },
+      colors: ["#ffd54a", "#ff8a5c", "#ff5b7a", "#7c5cff"],
+    });
+    return;
+  }
+  const colors = tier === 3 ? ["#fff1bf", "#f5c451", "#ffd76a", "#ffffff", "#ff8a5c"] : ["#ff8a3d", "#ffc88f", "#ffffff", "#ff5b7a"];
+  // Measured at each burst: the card has moved up the list by then.
+  const burst = (particleCount, spread, startVelocity) => {
+    if (!sourceEl.isConnected) return; // scrolled out of the list already
+    const rect = sourceEl.getBoundingClientRect();
+    confetti({
+      particleCount,
+      spread,
+      startVelocity,
+      colors,
+      scalar: 0.8,
+      ticks: 160,
+      origin: { x: (rect.left + rect.width / 2) / innerWidth, y: (rect.top + rect.height / 2) / innerHeight },
+    });
+  };
+  if (tier === 2) {
+    setTimeout(() => burst(50, 75, 30), 350);
+  } else {
+    setTimeout(() => burst(80, 90, 38), 350);
+    setTimeout(() => burst(60, 120, 30), 1100);
+    setTimeout(() => burst(60, 120, 30), 2100);
+  }
+}
+
+const GIFT_CARD_HTML = `
+  <div class="gc-sweep-clip"><div class="gc-sweep"></div></div>
+  <div class="gc-avatar"><span class="gc-initial"></span></div>
+  <div class="gc-text">
+    <div class="gc-label">
+      <svg viewBox="0 0 24 24"><path d="M12 0 Q12 12 24 12 Q12 12 12 24 Q12 12 0 12 Q12 12 12 0 Z"></path></svg>
+      <span class="gc-label-text"></span>
+    </div>
+    <div class="gc-name"></div>
+    <div class="gc-what">ส่ง <b class="gc-gift-name"></b><span class="gc-count"></span></div>
+  </div>
+  <div class="gc-gift">
+    <div class="gc-rays"></div>
+    <svg class="gc-gift-fallback" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="8" width="18" height="4" rx="1"></rect>
+      <path d="M5 12v8h14v-8M12 8v12M12 8c-1.5-4-6-4-5-1 .5 1.2 2.5 1 5 1zm0 0c1.5-4 6-4 5-1-.5 1.2-2.5 1-5 1z"></path>
+    </svg>
+  </div>
+  <div class="gc-coins">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.28"></circle><circle cx="12" cy="12" r="6.5" fill="currentColor"></circle></svg>
+    <span class="gc-coin-count"></span>
+  </div>`;
+
+// A tier 2 / tier 3 Gift: a card in the chat list instead of a plain line.
+// Returns the Gift picture element, for the confetti to come out of.
+function addGiftCard(gift, tier) {
+  const line = document.createElement("div");
+  line.className = `chat-line gift-card t${tier} live`;
+  line.innerHTML = GIFT_CARD_HTML;
+  const part = (name) => line.querySelector(`.gc-${name}`);
+
+  const nickname = gift.nickname || gift.user || "";
+  const count = gift.repeatCount || 1;
+  part("name").textContent = nickname;
+  part("initial").textContent = (Array.from(nickname)[0] || "?").toUpperCase();
+  part("label-text").textContent = GIFT_LABEL[tier];
+  part("gift-name").textContent = gift.giftName || "ของขวัญ";
+  part("count").textContent = count > 1 ? `×${count.toLocaleString("en-US")}` : "";
+  part("coin-count").textContent = (gift.diamondCount || 0).toLocaleString("en-US");
+
+  if (gift.avatarUrl) {
+    const avatar = createImg(gift.avatarUrl);
+    avatar.onerror = () => avatar.remove(); // the initial underneath shows instead
+    part("avatar").appendChild(avatar);
+  }
+  const picture = part("gift");
+  if (gift.giftImage) {
+    const img = createImg(gift.giftImage);
+    img.onload = () => picture.classList.add("has-img");
+    img.onerror = () => img.remove();
+    picture.appendChild(img);
+  }
+
+  pushLine(chatBox, line, MAX_LINES);
+  setTimeout(() => line.classList.remove("live"), GIFT_LIVE_MS[tier]);
+  return picture;
 }
 
 // TikTok and YouTube chat share this overlay; a small icon before the name
@@ -172,10 +275,16 @@ function addEmoteLine(nickname, emoteImages, avatarUrl, platform) {
   pushLine(chatBox, line, MAX_LINES);
 }
 
-function addGiftLine(nickname, giftName, repeatCount, avatarUrl) {
-  const { line, bubble } = buildLine("gift-line", "@" + nickname, avatarUrl, null);
-  const times = repeatCount > 1 ? ` <span class="gift-count">x${repeatCount}</span>` : "";
-  bubble.innerHTML = `<span class="comment">ส่ง ${escapeHtml(giftName)}${times}</span>`;
+// A tier 1 Gift: the plain line. Tiers 2 and 3 use addGiftCard instead.
+function addGiftLine(gift) {
+  const { line, bubble } = buildLine("gift-line", "@" + gift.nickname, gift.avatarUrl, null);
+  const times = gift.repeatCount > 1 ? ` <span class="gift-count">x${gift.repeatCount}</span>` : "";
+  bubble.innerHTML = `<span class="comment">ส่ง ${escapeHtml(gift.giftName)}${times}</span>`;
+  if (gift.giftImage) {
+    const thumb = createImg(gift.giftImage, "gift-thumb");
+    thumb.onerror = () => thumb.remove();
+    bubble.appendChild(thumb);
+  }
   pushLine(chatBox, line, MAX_LINES);
 }
 
@@ -216,8 +325,13 @@ function handleWsMessage(data) {
   }
 
   if (data.type === "gift") {
-    addGiftLine(data.nickname, data.giftName, data.repeatCount, data.avatarUrl);
-    celebrateGift();
+    const tier = giftTier(data.diamondCount || 0);
+    if (tier === 1) {
+      addGiftLine(data);
+      celebrateGift(1);
+    } else {
+      celebrateGift(tier, addGiftCard(data, tier));
+    }
     const times = data.repeatCount > 1 ? ` ${data.repeatCount} ชิ้น` : "";
     const gifterName = sanitizeNicknameForSpeech(data.nickname);
     speak(`ขอบคุณ ${gifterName} ที่ส่ง ${data.giftName}${times}`.replace(/\s+/g, " "), { keep: true });

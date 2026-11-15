@@ -35,14 +35,49 @@ npm start
 ## Test without a live session (mock mode)
 
 ```powershell
-$env:MOCK = "1"; npm start
+$env:MOCK = "1"; $env:MOCK_CHAT = "1"; npm start
 ```
 
 Generates fake chat, gift, and member-join events on intervals so you can preview the overlay and hear
-TTS without an active TikTok live session.
+TTS without an active TikTok live session. `MOCK=1` on its own only fires follow alerts; `MOCK_CHAT=1`
+adds the rest.
 
 Mock mode keeps its own Gift history in `logs/mock-gifts/`, never mixed with the real one. To fill
 `/gifts` with 30 days of fake history first, run `npm run seed:gifts` (re-running replaces it).
+
+### Testing Gift tiers on `/chat`
+
+Every Gift shows up in the chat list, in order, and scrolls with it. One worth under 100 coins (tier 1)
+is a plain line; 100 or more (tier 2) is an orange card; 1,000 or more (tier 3) is a gold card. A card's
+moving effects run for its first 5s (tier 2) or 8s (tier 3), then it stays as a still card. Change the
+thresholds with `?mid=` and `?big=` on the `/chat` URL.
+
+Mock Gifts top out at 150 coins, so the default thresholds never show tier 3. Two ways to see all three:
+
+**Lower the thresholds** so the mock Gifts cover every tier, then watch for a minute (one Gift every 8s):
+
+```
+http://localhost:8080/chat?mid=5&big=30
+```
+
+- Rose / Ice Cream Cone / Glow Stick, a few of them: tier 1 (plain line)
+- Finger Heart: tier 2 (orange card)
+- Doughnut: tier 3 (gold card)
+
+**Send one by hand.** Open `http://localhost:8080/chat`, press F12, and paste into the Console:
+
+```js
+handleWsMessage({ type: "gift", nickname: "ทดสอบ", user: "t1", giftName: "Lion", repeatCount: 2, diamondCount: 59998, avatarUrl: "", giftImage: "" })
+```
+
+`diamondCount` picks the tier: `5` is tier 1, `240` tier 2, `59998` tier 3.
+
+Things that look like bugs but aren't:
+
+- A card's Gift picture and coin total never appear: the tab is in the background, where the browser
+  pauses animations. Keep it in front. OBS browser sources aren't affected.
+- Nothing changed after an edit: refresh the page (or the browser source in OBS).
+- `/chat` also speaks through your speakers. Turn TTS off in the Panel if you'd rather it didn't.
 
 ## Use with OBS/Streamlabs
 

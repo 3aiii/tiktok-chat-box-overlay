@@ -16,6 +16,13 @@ _Avoid_: Donation
 A run of the same Gift sent repeatedly by holding the send button; collapses into a single announcement once it ends rather than one per tap.
 _Avoid_: Combo, repeat
 
+**Gift tier**:
+How much a Gift is worth, in three steps by the coins of the whole Gift streak: tier 1 below 100 coins,
+tier 2 from 100, tier 3 from 1,000 (both thresholds are settings on the chat overlay's URL). Every Gift
+sits in the chat overlay's list, in the order it arrived, and scrolls with the Comments around it. The
+tier only decides how it looks there: tier 1 is a plain line, tier 2 an orange card, tier 3 a gold one.
+_Avoid_: Gift level, rank, VIP gift
+
 **Member join**:
 The event of a viewer entering the room. Shown as a card, never spoken aloud.
 _Avoid_: Viewer join, entrance

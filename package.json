@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test-song-requests.js",
+    "test": "node test-song-requests.js && node test-donations.js",
     "trace": "node trace-live-log.js",
     "seed:gifts": "node seed-mock-gifts.js"
   },

@@ -4,7 +4,7 @@
 //   seconds -- how long each rank stays on screen (default 3.5, min 2)
 //   accent  -- hex without '#', colour for ranks 4-10 (default FF8A3D orange)
 //   demo    -- 1 uses fake data so the source can be positioned in OBS
-const POLL_MS = 15000;
+const POLL_MS = 60000;
 const OUT_MS = 380; // length of the exit transition before the next rank is swapped in
 
 const params = new URLSearchParams(location.search);
@@ -152,6 +152,19 @@ async function refresh() {
 if (params.get("demo") === "1") {
   apply([2500, 1800, 1200, 950, 700, 520, 400, 300, 200, 100].map((amount, i) => ({ name: `ชื่อผู้โดเนท ${i + 1}`, amount })));
 } else {
+  // The server announces each new donation over WS the moment its own poll of
+  // EasyDonate finds it, so the board refreshes then instead of waiting for
+  // the next tick. Connecting (and reconnecting after a server restart) loads
+  // it too. The timer is only a safety net -- and what picks up hand edits to
+  // extra-donors.json, or new donors in MOCK mode, where nothing is announced.
+  connectWS(
+    (data) => {
+      if (data.type === "donation") refresh();
+    },
+    (connected) => {
+      if (connected) refresh();
+    }
+  );
   refresh();
   setInterval(refresh, POLL_MS);
 }

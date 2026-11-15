@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { URL } = require('url');
 const { startYouTubeChat } = require('./youtube-chat');
+const { createDonations } = require('./donations');
 
 const TIKTOK_USERNAME = process.env.TIKTOK_USERNAME || 'your_tiktok_username';
 const WS_PORT = process.env.WS_PORT || 8081;
@@ -589,48 +590,37 @@ async function addFillerSong(link) {
   return { ok: true };
 }
 
-// Proxied (not called directly from the browser) so the EasyDonate API key
-// never ships to the client. Falls back to mock data when no key is
-// configured, so the /top-donate widget works out of the box.
-// EasyDonate's leaderboard widget endpoint only returns as many donors as the
-// widget's dashboard "count" setting (5 by default) and keys them by exact
-// name, so "Skyfall" and "skyfall" split and anyone past rank 5 is lost.
-// Building the board from the full donation history instead gives every donor,
-// which withExtraEntry then merges by name/alias.
-const DONATIONS_PAGE_SIZE = 100;
+// EasyDonate donations (see donations.js): walked once, then kept up to date
+// in memory from the first page of the history. Proxied through here (not
+// called from the browser) so the API key never ships to the client.
+//
+// The leaderboard is built from the full history rather than EasyDonate's own
+// leaderboard endpoint, which only returns as many donors as the widget's
+// dashboard "count" setting (5 by default) and keys them by exact name, so
+// "Skyfall" and "skyfall" split and anyone past rank 5 is lost. Having every
+// donation lets withExtraEntry merge them by name/alias.
+//
+// Polling is off in MOCK mode -- no `donation` events for /walkers there --
+// so the leaderboard, which still shows real donors when a key is set,
+// refreshes itself on request instead.
+const DONATION_POLLING = Boolean(EASYDONATE_API_KEY) && !MOCK_MODE;
+const DONATIONS_UNPOLLED_MAX_AGE_MS = 15000;
 
-async function fetchDonationTotals() {
-  const donations = [];
-  for (let page = 1, totalPage = 1; page <= totalPage; page++) {
-    const { data } = await getJson(
-      `${EASYDONATE_API_BASE_URL}/api/v1/donations?size=${DONATIONS_PAGE_SIZE}&page=${page}`,
-      { Authorization: `Bearer ${EASYDONATE_API_KEY}` },
-    );
-    totalPage = data?.totalPage || 1;
-    donations.push(...(data?.histories || []));
-  }
-  return donations
-    .filter((donation) => donation.status === 'SUCCESS')
-    .map((donation) => ({ name: donation.donatorName || 'ไม่ระบุชื่อ', amount: Number(donation.amount) || 0 }));
-}
+const donations = createDonations({
+  apiKey: EASYDONATE_API_KEY,
+  baseUrl: EASYDONATE_API_BASE_URL,
+  fetchJson: getJson,
+  // A live `donation` event for /walkers.
+  onDonation: (donation) => {
+    console.log(`[donation] ${donation.name} ${donation.amount} THB`);
+    broadcast({ type: 'donation', ...donation });
+  },
+});
 
-// Every open /top-donate source polls every 15s and each poll pages through
-// the whole donation history, so they share one fetch for a short while
-// instead of each walking EasyDonate on its own.
-const DONATIONS_CACHE_MS = 15000;
-let donationsCache = { at: 0, promise: null };
+if (DONATION_POLLING) donations.start();
 
-function cachedDonationTotals() {
-  if (!donationsCache.promise || Date.now() - donationsCache.at > DONATIONS_CACHE_MS) {
-    const promise = fetchDonationTotals();
-    donationsCache = { at: Date.now(), promise };
-    promise.catch(() => {
-      if (donationsCache.promise === promise) donationsCache = { at: 0, promise: null }; // retry next poll
-    });
-  }
-  return donationsCache.promise;
-}
-
+// Falls back to mock data when no key is configured, so the /top-donate
+// widget works out of the box.
 async function handleLeaderboard(req, res) {
   if (!EASYDONATE_API_KEY) {
     sendJson(res, 200, { leaderboard: withExtraEntry(MOCK_LEADERBOARD), mock: true });
@@ -638,82 +628,26 @@ async function handleLeaderboard(req, res) {
   }
 
   try {
-    const leaderboard = withExtraEntry(await cachedDonationTotals());
-    sendJson(res, 200, { leaderboard, mock: false });
+    const list = await donations.all({ maxAgeMs: DONATION_POLLING ? Infinity : DONATIONS_UNPOLLED_MAX_AGE_MS });
+    sendJson(res, 200, { leaderboard: withExtraEntry(list), mock: false });
   } catch (err) {
     console.error('EasyDonate leaderboard error:', err.message);
     sendJson(res, 502, { error: 'EasyDonate request failed' });
   }
 }
 
-// Individual donations, newest first, for /walkers: a live `donation` event
-// for each new one and today's list for a freshly opened overlay. EasyDonate
-// has no push, so the server polls the first page of the history -- a few
-// rows every 10s, cheap next to /top-donate walking the whole thing.
-const DONATION_POLL_MS = 10000;
-const seenDonationIds = new Set();
-let donationPollSeeded = false;
-
-const toDonation = (d) => ({
-  id: d.id,
-  name: d.donatorName || 'ไม่ระบุชื่อ',
-  amount: Number(d.amount) || 0,
-  message: d.donateMessage || '',
-  t: Date.parse(d.createdAt) || Date.now(),
-});
-
-async function pollDonations() {
-  try {
-    const { data } = await getJson(`${EASYDONATE_API_BASE_URL}/api/v1/donations?size=20&page=1`, {
-      Authorization: `Bearer ${EASYDONATE_API_KEY}`,
-    });
-    // Oldest first, so two arriving together come out in order.
-    for (const d of (data?.histories || []).slice().reverse()) {
-      // Only SUCCESS counts as seen: a pending one gets announced once it clears.
-      if (d.status !== 'SUCCESS' || seenDonationIds.has(d.id)) continue;
-      seenDonationIds.add(d.id);
-      // The first poll only learns what's already there -- no replaying old ones.
-      if (donationPollSeeded) {
-        const donation = toDonation(d);
-        console.log(`[donation] ${donation.name} ${donation.amount} THB`);
-        broadcast({ type: 'donation', ...donation });
-      }
-    }
-    donationPollSeeded = true;
-  } catch (err) {
-    console.error('[donation] poll failed:', err.message);
-  }
-}
-
-if (EASYDONATE_API_KEY && !MOCK_MODE) {
-  pollDonations();
-  setInterval(pollDonations, DONATION_POLL_MS);
-}
-
-// GET /api/donations-today -- SUCCESS donations since local midnight. Pages
-// back only until it passes midnight, since the history is newest first.
+// GET /api/donations-today -- SUCCESS donations since local midnight, newest
+// first, for a freshly opened /walkers.
 async function handleDonationsToday(res) {
-  if (!EASYDONATE_API_KEY || MOCK_MODE) {
+  if (!DONATION_POLLING) {
     sendJson(res, 200, { donations: [], mock: true });
     return;
   }
   const midnight = new Date();
   midnight.setHours(0, 0, 0, 0);
   try {
-    const donations = [];
-    for (let page = 1, totalPage = 1; page <= totalPage; page++) {
-      const { data } = await getJson(`${EASYDONATE_API_BASE_URL}/api/v1/donations?size=${DONATIONS_PAGE_SIZE}&page=${page}`, {
-        Authorization: `Bearer ${EASYDONATE_API_KEY}`,
-      });
-      totalPage = data?.totalPage || 1;
-      const rows = data?.histories || [];
-      for (const d of rows) {
-        const donation = toDonation(d);
-        if (d.status === 'SUCCESS' && donation.t >= midnight.getTime()) donations.push(donation);
-      }
-      if (!rows.length || toDonation(rows[rows.length - 1]).t < midnight.getTime()) break;
-    }
-    sendJson(res, 200, { donations, mock: false });
+    const today = (await donations.all()).filter((donation) => donation.t >= midnight.getTime());
+    sendJson(res, 200, { donations: today, mock: false });
   } catch (err) {
     console.error('[donation] today list failed:', err.message);
     sendJson(res, 502, { error: 'EasyDonate request failed' });

@@ -141,6 +141,7 @@ _Avoid_: Playlist, song queue
 
 - A **Gift streak** resolves into exactly one Gift announcement
 - A **Repeat flood**, a **Pattern collapse**, a **Gibberish spam**, and a **Blocked word** all suppress speech only — none hides a Comment or a Gift card
+- TTS never falls far behind the screen: a Comment that has waited more than 20s for its turn, or that is pushed out by more than 8 Comments waiting, is shown but not spoken. A **Gift** announcement is exempt from both and is spoken ahead of every waiting Comment (after the line already being read, and after earlier Gifts) — a viewer who paid is always heard, and promptly
 - The **TTS toggle**, when off, suppresses all speech regardless of Repeat flood, Pattern collapse, Gibberish spam, or Blocked word state
 - A **Song request** is still a Comment — being one doesn't hide it from the chat overlay, but it is never spoken: its body is a URL, which TTS reads out one character at a time
 - A **Song request** is refused at the moment it's made (not silently dropped later) when the video fails any playability check

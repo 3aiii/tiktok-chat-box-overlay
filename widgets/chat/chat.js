@@ -220,7 +220,7 @@ function handleWsMessage(data) {
     celebrateGift();
     const times = data.repeatCount > 1 ? ` ${data.repeatCount} ชิ้น` : "";
     const gifterName = sanitizeNicknameForSpeech(data.nickname);
-    speak(`ขอบคุณ ${gifterName} ที่ส่ง ${data.giftName}${times}`.replace(/\s+/g, " "));
+    speak(`ขอบคุณ ${gifterName} ที่ส่ง ${data.giftName}${times}`.replace(/\s+/g, " "), { keep: true });
     return;
   }
 
@@ -256,19 +256,85 @@ function handleWsMessage(data) {
 
 const TTS_CHUNK_LIMIT = 200;
 const TTS_VOLUME = 0.4;
-const speakQueue = [];
+// A busy chat is read late, not never: each line takes a couple of seconds to
+// say, so without a limit the voice falls further and further behind the
+// screen. Two limits keep it close -- a Comment that has waited longer than
+// TTS_MAX_WAIT_MS is skipped when its turn comes, and past TTS_MAX_QUEUE
+// waiting Comments the oldest one is dropped. Gift thanks are exempt from
+// both: a viewer who paid always gets heard.
+const TTS_MAX_QUEUE = 8;
+const TTS_MAX_WAIT_MS = 20000;
+const speakQueue = []; // { chunks, at, keep }
 let isSpeaking = false;
 let currentAudio = null;
 let cancelCurrentWatchdog = null;
 
-function speak(text) {
+// The next chunk's audio, requested while the current one is still playing so
+// there's no silent gap for the round-trip between lines. One slot only.
+let prefetched = null; // { url, audio }
+
+const ttsUrl = (chunk) => "/tts?text=" + encodeURIComponent(chunk);
+
+function discardPrefetch() {
+  if (!prefetched) return;
+  // Dropping the src aborts the download instead of leaving it to finish.
+  prefetched.audio.removeAttribute("src");
+  prefetched.audio.load();
+  prefetched = null;
+}
+
+// fromQueue: it's the head of speakQueue rather than the next chunk of the
+// line being read -- the only kind a Gift cutting in is allowed to replace.
+function prefetch(url, fromQueue) {
+  if (!url || (prefetched && prefetched.url === url)) return;
+  discardPrefetch();
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.src = url;
+  prefetched = { url, audio, fromQueue };
+}
+
+// The prefetched audio if it's the one wanted, otherwise a fresh request.
+function takeAudio(url) {
+  if (prefetched && prefetched.url === url && !prefetched.audio.error) {
+    const { audio } = prefetched;
+    prefetched = null;
+    return audio;
+  }
+  discardPrefetch();
+  return new Audio(url);
+}
+
+function speak(text, { keep = false } = {}) {
   if (!ttsEnabled) return;
-  speakQueue.push(text);
-  if (!isSpeaking) processQueue();
+  const chunks = splitForTts(text, TTS_CHUNK_LIMIT);
+  if (!chunks.length) return;
+  const item = { chunks, at: Date.now(), keep };
+  // Gift thanks cut ahead of every waiting Comment (but behind earlier Gifts,
+  // which are all at the front already), so a fast chat can't bury them. The
+  // line being read right now still finishes first.
+  const firstComment = speakQueue.findIndex((queued) => !queued.keep);
+  if (keep && firstComment !== -1) {
+    speakQueue.splice(firstComment, 0, item);
+  } else {
+    speakQueue.push(item);
+  }
+  if (speakQueue.filter((queued) => !queued.keep).length > TTS_MAX_QUEUE) {
+    const [dropped] = speakQueue.splice(speakQueue.findIndex((queued) => !queued.keep), 1);
+    console.warn("[tts] dropped (queue full)", dropped.chunks.join(" "));
+  }
+  if (!isSpeaking) {
+    processQueue();
+  } else if (!prefetched || prefetched.fromQueue) {
+    // Either nothing was queued behind the line being read until now, or the
+    // head of the queue just changed (a Gift cut in, or the cap dropped it).
+    prefetch(ttsUrl(speakQueue[0].chunks[0]), true);
+  }
 }
 
 function stopSpeaking() {
   speakQueue.length = 0;
+  discardPrefetch();
   if (cancelCurrentWatchdog) {
     cancelCurrentWatchdog();
     cancelCurrentWatchdog = null;
@@ -283,13 +349,16 @@ function stopSpeaking() {
 }
 
 function processQueue() {
+  while (speakQueue.length && !speakQueue[0].keep && Date.now() - speakQueue[0].at > TTS_MAX_WAIT_MS) {
+    console.warn("[tts] dropped (waited too long)", speakQueue.shift().chunks.join(" "));
+  }
   if (speakQueue.length === 0) {
     isSpeaking = false;
+    discardPrefetch();
     return;
   }
   isSpeaking = true;
-  const chunks = splitForTts(speakQueue.shift(), TTS_CHUNK_LIMIT);
-  playChunks(chunks, 0, processQueue);
+  playChunks(speakQueue.shift().chunks, 0, processQueue);
 }
 
 function splitForTts(text, maxLen) {
@@ -312,11 +381,15 @@ function playChunks(chunks, i, onDone) {
     onDone();
     return;
   }
-  const url = "/tts?text=" + encodeURIComponent(chunks[i]);
-  const audio = new Audio(url);
+  const audio = takeAudio(ttsUrl(chunks[i]));
   audio.volume = TTS_VOLUME;
   audio.playbackRate = ttsSpeed;
   currentAudio = audio;
+  if (i + 1 < chunks.length) {
+    prefetch(ttsUrl(chunks[i + 1]), false);
+  } else if (speakQueue.length) {
+    prefetch(ttsUrl(speakQueue[0].chunks[0]), true);
+  }
 
   let settled = false;
   const watchdog = setTimeout(() => {

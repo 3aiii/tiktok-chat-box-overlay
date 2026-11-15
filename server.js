@@ -41,13 +41,19 @@ let ttsReadChance = 1;
 // surface on the control room's LIVE badge.
 let tiktokLiveConnected = MOCK_MODE;
 
+// The TikTok room of the live we're reading (each go-live gets a new one;
+// reconnecting mid-live keeps it). Stamped on every Gift history entry, so
+// "this live" survives a server restart -- /walkers crowns the top gifter of
+// the current room.
+let currentRoomId = MOCK_MODE ? 'mock' : '';
+
 // How many consecutive times connectToTikTok has failed since the last
 // success; surfaced in tiktokConnectionPayload's detail so the control
 // room's badge shows retry progress instead of a static offline message.
 let tiktokReconnectAttempt = 0;
 
 function tiktokConnectionPayload(detailOverride) {
-  const payload = { type: 'tiktok-connection-state', connected: tiktokLiveConnected };
+  const payload = { type: 'tiktok-connection-state', connected: tiktokLiveConnected, roomId: currentRoomId };
   if (!tiktokLiveConnected) {
     payload.detail =
       detailOverride ||
@@ -264,7 +270,7 @@ function sendJson(res, statusCode, data) {
 }
 
 // In-memory only, by design (see CONTEXT.md non-goals) -- resets on server
-// restart, no file/db persistence. gifters is keyed by uniqueId so a repeat
+// restart, no file/db persistence. gifters is keyed by the viewer's @handle so a repeat
 // donor's diamonds accumulate onto the same entry instead of splitting.
 const stats = {
   comments: 0,
@@ -640,6 +646,80 @@ async function handleLeaderboard(req, res) {
   }
 }
 
+// Individual donations, newest first, for /walkers: a live `donation` event
+// for each new one and today's list for a freshly opened overlay. EasyDonate
+// has no push, so the server polls the first page of the history -- a few
+// rows every 10s, cheap next to /top-donate walking the whole thing.
+const DONATION_POLL_MS = 10000;
+const seenDonationIds = new Set();
+let donationPollSeeded = false;
+
+const toDonation = (d) => ({
+  id: d.id,
+  name: d.donatorName || 'ไม่ระบุชื่อ',
+  amount: Number(d.amount) || 0,
+  message: d.donateMessage || '',
+  t: Date.parse(d.createdAt) || Date.now(),
+});
+
+async function pollDonations() {
+  try {
+    const { data } = await getJson(`${EASYDONATE_API_BASE_URL}/api/v1/donations?size=20&page=1`, {
+      Authorization: `Bearer ${EASYDONATE_API_KEY}`,
+    });
+    // Oldest first, so two arriving together come out in order.
+    for (const d of (data?.histories || []).slice().reverse()) {
+      // Only SUCCESS counts as seen: a pending one gets announced once it clears.
+      if (d.status !== 'SUCCESS' || seenDonationIds.has(d.id)) continue;
+      seenDonationIds.add(d.id);
+      // The first poll only learns what's already there -- no replaying old ones.
+      if (donationPollSeeded) {
+        const donation = toDonation(d);
+        console.log(`[donation] ${donation.name} ${donation.amount} THB`);
+        broadcast({ type: 'donation', ...donation });
+      }
+    }
+    donationPollSeeded = true;
+  } catch (err) {
+    console.error('[donation] poll failed:', err.message);
+  }
+}
+
+if (EASYDONATE_API_KEY && !MOCK_MODE) {
+  pollDonations();
+  setInterval(pollDonations, DONATION_POLL_MS);
+}
+
+// GET /api/donations-today -- SUCCESS donations since local midnight. Pages
+// back only until it passes midnight, since the history is newest first.
+async function handleDonationsToday(res) {
+  if (!EASYDONATE_API_KEY || MOCK_MODE) {
+    sendJson(res, 200, { donations: [], mock: true });
+    return;
+  }
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  try {
+    const donations = [];
+    for (let page = 1, totalPage = 1; page <= totalPage; page++) {
+      const { data } = await getJson(`${EASYDONATE_API_BASE_URL}/api/v1/donations?size=${DONATIONS_PAGE_SIZE}&page=${page}`, {
+        Authorization: `Bearer ${EASYDONATE_API_KEY}`,
+      });
+      totalPage = data?.totalPage || 1;
+      const rows = data?.histories || [];
+      for (const d of rows) {
+        const donation = toDonation(d);
+        if (d.status === 'SUCCESS' && donation.t >= midnight.getTime()) donations.push(donation);
+      }
+      if (!rows.length || toDonation(rows[rows.length - 1]).t < midnight.getTime()) break;
+    }
+    sendJson(res, 200, { donations, mock: false });
+  } catch (err) {
+    console.error('[donation] today list failed:', err.message);
+    sendJson(res, 502, { error: 'EasyDonate request failed' });
+  }
+}
+
 // YouTube Music now-playing, pushed by the ytmusic.user.js userscript running
 // in the streamer's music.youtube.com tab (POST /api/ytmusic) and relayed to
 // the /ytmusic widget. In-memory only; the tab re-sends every few seconds, so
@@ -759,6 +839,7 @@ const PAGE_ROUTES = {
   '/music': 'widgets/music/music.html',
   '/follow': 'widgets/follow/follow.html',
   '/ytmusic': 'widgets/ytmusic/ytmusic.html',
+  '/walkers': 'widgets/walkers/walkers.html',
 };
 
 // Widget files (html/css/js under widgets/) and the bundled fonts, served
@@ -775,6 +856,7 @@ const CONTENT_TYPES = {
   '.css': 'text/css',
   '.ttf': 'font/ttf',
   '.woff2': 'font/woff2',
+  '.png': 'image/png', // /walkers sprite sheets
 };
 
 function serveFile(res, filePath) {
@@ -800,6 +882,11 @@ const httpServer = http.createServer((req, res) => {
 
   if (reqUrl.pathname === '/api/gift-events') {
     handleGiftEvents(reqUrl, res);
+    return;
+  }
+
+  if (reqUrl.pathname === '/api/donations-today') {
+    handleDonationsToday(res);
     return;
   }
 
@@ -903,6 +990,8 @@ function recordGift(message) {
   const now = new Date();
   const entry = {
     t: now.getTime(),
+    roomId: currentRoomId,
+    userId: message.userId || '',
     user: message.user,
     nickname: message.nickname,
     avatarUrl: message.avatarUrl || '',
@@ -956,6 +1045,40 @@ async function handleGiftEvents(reqUrl, res) {
   }
   const events = (await Promise.all(days.map(readGiftDay))).flat().filter((e) => e.t >= from && e.t < to);
   sendJson(res, 200, { events });
+}
+
+// Gift history backup: GIFT_BACKUP_DIR (e.g. a OneDrive / Google Drive
+// folder that syncs itself) gets a copy of every gifts-*.jsonl, so the
+// history survives a dead disk or a deleted logs/ folder. Copies on startup
+// and hourly, and only files that changed since the last copy. Off when
+// unset, and never in MOCK mode -- mock Gifts aren't worth keeping.
+const GIFT_BACKUP_DIR = (process.env.GIFT_BACKUP_DIR || '').trim();
+const GIFT_BACKUP_INTERVAL_MS = 60 * 60 * 1000;
+
+async function backupGiftHistory() {
+  try {
+    await fs.promises.mkdir(GIFT_BACKUP_DIR, { recursive: true });
+    const names = (await fs.promises.readdir(GIFT_LOG_DIR)).filter((n) => /^gifts-\d{4}-\d{2}-\d{2}\.jsonl$/.test(n));
+    let copied = 0;
+    for (const name of names) {
+      const src = path.join(GIFT_LOG_DIR, name);
+      const dest = path.join(GIFT_BACKUP_DIR, name);
+      const srcStat = await fs.promises.stat(src);
+      const destStat = await fs.promises.stat(dest).catch(() => null);
+      // The log is append-only, so a size match means nothing new to copy.
+      if (destStat && destStat.size === srcStat.size) continue;
+      await fs.promises.copyFile(src, dest);
+      copied++;
+    }
+    if (copied) console.log(`[gift-backup] copied ${copied} file(s) to ${GIFT_BACKUP_DIR}`);
+  } catch (err) {
+    console.error('[gift-backup] failed:', err.message);
+  }
+}
+
+if (GIFT_BACKUP_DIR && !MOCK_MODE) {
+  backupGiftHistory();
+  setInterval(backupGiftHistory, GIFT_BACKUP_INTERVAL_MS);
 }
 
 // Live log: one JSON object per line in logs/live-YYYY-MM-DD.jsonl, written
@@ -1390,6 +1513,7 @@ if (MOCK_MODE) {
         liveLog('tiktok-state', { event: 'connected', roomId: state.roomId, username: TIKTOK_USERNAME });
         tiktokLiveConnected = true;
         tiktokReconnectAttempt = 0;
+        currentRoomId = String(state.roomId || '');
         broadcast(tiktokConnectionPayload());
       })
       .catch((err) => {
@@ -1404,10 +1528,23 @@ if (MOCK_MODE) {
   }
   connectToTikTok();
 
+  // The viewer's @handle. tiktok-live-connector 2.x decodes with the v3
+  // proto, where it's `displayId`; `uniqueId` was the v2 name and is now
+  // always undefined -- which merged every gifter into one Gift history entry.
+  const tiktokHandle = (user) => user?.displayId || user?.uniqueId || '';
+
+  // TikTok's numeric account id. Unlike the @handle it never changes, so Gift
+  // history keys a viewer on it. "0" is what an unset int64 decodes to.
+  const tiktokUserId = (user) => {
+    const id = String(user?.id || '');
+    return id === '0' ? '' : id;
+  };
+
   // The viewer fields every TikTok event carries, in our message shape.
   const tiktokViewer = (data) => ({
     platform: 'tiktok',
-    user: data.user?.uniqueId,
+    userId: tiktokUserId(data.user),
+    user: tiktokHandle(data.user),
     nickname: data.user?.nickname,
     avatarUrl: data.user?.avatarThumb?.urlList?.[0] || '',
   });
@@ -1420,9 +1557,9 @@ if (MOCK_MODE) {
     try {
       handleIncomingComment({ type: 'chat', ...tiktokViewer(data), comment: data.content });
     } catch (err) {
-      liveLog('error', { where: 'chat-handler', user: data?.user?.uniqueId, content: data?.content, error: err.message });
+      liveLog('error', { where: 'chat-handler', user: tiktokHandle(data?.user), content: data?.content, error: err.message });
       console.error('[chat] CHAT handler threw for raw event', {
-        uniqueId: data?.user?.uniqueId,
+        handle: tiktokHandle(data?.user),
         nickname: data?.user?.nickname,
         content: data?.content,
         error: err.stack || err.message,
@@ -1499,7 +1636,7 @@ if (MOCK_MODE) {
           liveLog('tiktok-raw', {
             method: m.method,
             msgId: d.common?.msgId,
-            user: d.user?.uniqueId,
+            user: tiktokHandle(d.user),
             nickname: d.user?.nickname,
             content: d.content,
           });
@@ -1522,9 +1659,9 @@ if (MOCK_MODE) {
       console.log(`[emote] ${message.nickname}: ${message.emoteImages.length} sticker(s)`);
       if (message.emoteImages.length) emitLiveEvent(message);
     } catch (err) {
-      liveLog('error', { where: 'emote-handler', user: data?.user?.uniqueId, error: err.message });
+      liveLog('error', { where: 'emote-handler', user: tiktokHandle(data?.user), error: err.message });
       console.error('[emote] EMOTE handler threw', {
-        uniqueId: data?.user?.uniqueId,
+        handle: tiktokHandle(data?.user),
         error: err.stack || err.message,
       });
     }

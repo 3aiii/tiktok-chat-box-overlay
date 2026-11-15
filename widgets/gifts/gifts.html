@@ -32,6 +32,7 @@
     <div class="stat stat-accent">
       <div class="stat-label">เพชรทั้งหมด</div>
       <div class="stat-value" id="stat-diamonds">0</div>
+      <div class="stat-delta" id="delta-diamonds"></div>
     </div>
     <div class="stat">
       <div class="stat-label">≈ รายได้ (บาท)</div>
@@ -41,10 +42,12 @@
     <div class="stat">
       <div class="stat-label">จำนวน Gift</div>
       <div class="stat-value" id="stat-count">0</div>
+      <div class="stat-delta" id="delta-count"></div>
     </div>
     <div class="stat stat-olive">
       <div class="stat-label">ผู้ให้ Gift</div>
       <div class="stat-value" id="stat-gifters">0 คน</div>
+      <div class="stat-delta" id="delta-gifters"></div>
     </div>
   </div>
 
@@ -54,7 +57,12 @@
         <h3>เพชรตามเวลา</h3>
         <span class="muted small" id="axis-label">รายชั่วโมง</span>
       </div>
-      <div class="bars" id="bars"></div>
+      <p class="chart-summary" id="chart-summary"></p>
+      <div class="chart">
+        <div class="grid" id="grid"></div>
+        <div class="bars" id="bars"></div>
+        <div class="chart-tip" id="chart-tip" hidden></div>
+      </div>
     </section>
     <section class="panel">
       <h3>แยกตามประเภท Gift</h3>
@@ -75,6 +83,21 @@
       <div id="recent"></div>
     </section>
   </div>
+
+  <section class="panel">
+    <div class="panel-title-row fans-head">
+      <div>
+        <h3>แฟนประจำ</h3>
+        <span class="muted small" id="fans-note">30 วันล่าสุด · ไม่ขึ้นกับช่วงที่เลือกด้านบน</span>
+      </div>
+      <div class="seg" id="fan-tab">
+        <button type="button" data-value="regular" class="active">ประจำ</button>
+        <button type="button" data-value="new">ใหม่</button>
+        <button type="button" data-value="lapsed">หายไป</button>
+      </div>
+    </div>
+    <div id="fans"></div>
+  </section>
 </main>
 
 <script src="/widgets/shared/shared.js"></script>

@@ -91,8 +91,17 @@ _Avoid_: Stream stats, analytics
 Every TikTok Gift appended to `logs/gifts-YYYY-MM-DD.jsonl` (one file per local day) as it is broadcast,
 read back by `/gifts` through `/api/gift-events` to chart today / yesterday / 7 / 30 days. Unlike
 Session stats summary it survives a server restart, by the streamer's choice (2026-11-14). Mock Gifts
-(`MOCK=1`) go to `logs/mock-gifts/` instead, never the real history.
+(`MOCK=1`) go to `logs/mock-gifts/` instead, never the real history. A viewer is identified by TikTok's
+numeric `userId` (stable across @handle changes); older entries without it are matched by @handle, then
+nickname, so one viewer's Gifts aren't split. Setting `GIFT_BACKUP_DIR` copies the files there on
+startup and hourly (meant for a cloud-synced folder).
 _Avoid_: Gift log, donation history (Donation is EasyDonate)
+
+**Regular fans**:
+The `/gifts` section built from the last 30 days of Gift history, whatever range is picked: regulars
+(gifted on 2+ days, latest within 7 days), new gifters (first Gift in the window within 7 days) and
+lapsed regulars (2+ days, nothing in the last 7).
+_Avoid_: Loyalty, VIP
 
 **BRB Timer**:
 A break countdown shown on its own overlay (`/timer`) and controlled from the panel: preset or custom

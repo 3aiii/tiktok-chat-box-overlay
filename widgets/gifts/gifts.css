@@ -13,16 +13,75 @@
 .stat-accent .stat-label { color: inherit; opacity: 0.9; }
 .stat-olive { background: var(--a2-100); box-shadow: none; }
 .stat-olive .stat-label, .stat-olive .stat-value { color: var(--a2-700); }
+/* vs the previous period: the arrow carries direction, the text stays ink */
+.stat-delta { font-size: 12px; color: var(--n-700); margin-top: 4px; min-height: 16px; }
+.stat-delta .delta-arrow { font-size: 10px; }
+.stat-delta.up .delta-arrow { color: var(--accent-2); }
+.stat-delta.down .delta-arrow { color: var(--accent); }
+.stat-accent .stat-delta, .stat-accent .stat-delta .delta-arrow { color: inherit; opacity: 0.9; }
+.stat-olive .stat-delta { color: var(--a2-700); }
 
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; margin-bottom: 20px; align-items: start; }
 .panel-title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 
 /* ---- diamonds over time ---- */
-.bars { display: flex; align-items: flex-end; gap: 5px; height: 200px; margin-top: 4px; }
-.bar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; }
-.bar-fill { width: 100%; min-height: 4px; border-radius: 999px; background: var(--a-300); transition: height 0.3s ease; }
+.chart-summary { margin: -6px 0 0; font-size: 13px; color: var(--n-700); }
+.chart-summary b { color: var(--text); font-weight: 600; }
+/* left gutter holds the gridline values; bottom 22px holds the x labels */
+.chart { position: relative; height: 220px; padding: 0 0 22px 40px; }
+.grid { position: absolute; inset: 0 0 22px 40px; pointer-events: none; }
+.grid-line { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--divider); }
+.grid-line span {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: -7px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--n-700);
+  font-variant-numeric: tabular-nums;
+}
+.bars { position: relative; display: flex; height: 100%; }
+.bar { position: relative; flex: 1; min-width: 0; height: 100%; display: flex; justify-content: center; align-items: flex-end; cursor: default; }
+.bar:hover { background: color-mix(in srgb, var(--text) 5%, transparent); border-radius: 6px 6px 0 0; }
+.bar-fill {
+  position: relative;
+  width: min(70%, 24px);
+  min-height: 3px;
+  border-radius: 4px 4px 0 0;
+  background: var(--a-300);
+  transition: height 0.3s ease;
+}
+.bar:hover .bar-fill { background: var(--a-400); }
 .bar.peak .bar-fill { background: var(--accent); }
-.bar-label { height: 14px; font-size: 10.5px; color: var(--n-700); white-space: nowrap; }
+.bar-value {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.bar-label { position: absolute; top: calc(100% + 6px); font-size: 10.5px; color: var(--n-700); white-space: nowrap; }
+.chart-tip {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, calc(-100% - 6px));
+  margin-left: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-lg);
+  z-index: 2;
+}
+.chart-tip .tip-title { font-weight: 700; }
+.chart-tip .muted { color: color-mix(in srgb, var(--bg) 72%, transparent); }
 
 /* ---- by gift type ---- */
 .types { display: flex; flex-direction: column; gap: 12px; }
@@ -88,8 +147,31 @@
 .recent-text b { font-weight: 600; }
 .recent-plus { padding: 2px 10px; border-radius: 999px; background: var(--a-100); color: var(--a-700); font-weight: 700; font-size: 12.5px; }
 
+/* ---- regular fans ---- */
+.fans-head { align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.fans-head h3 { margin-bottom: 2px; }
+.fan {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.fan:last-child { border-bottom: 0; }
+/* one cell per day of the 30, oldest left -- filled on days they gifted */
+.fan-days { display: grid; grid-template-columns: repeat(30, 6px); gap: 2px; }
+.fan-days span { height: 16px; border-radius: 2px; background: var(--surface); }
+.fan-days span.on { background: var(--accent); }
+.fan-stat { text-align: right; font-variant-numeric: tabular-nums; min-width: 92px; }
+.fan-stat b { font-weight: 700; }
+.fan-stat div:last-child { font-size: 12px; color: var(--n-700); }
+.fan-tag { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--a2-100); color: var(--a2-700); font-size: 11px; font-weight: 700; }
+
 .empty { padding: 28px 0; text-align: center; color: var(--n-700); font-size: 13px; }
 
 @media (max-width: 860px) {
   .stat-value { font-size: 32px; }
+  .fan { grid-template-columns: 38px minmax(0, 1fr) auto; }
+  .fan-days { display: none; }
 }

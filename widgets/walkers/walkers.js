@@ -3,9 +3,10 @@
 // name, their profile picture and name on a tag above, their Comments in a
 // speech bubble from then on. A Gift makes their cat jump and pops the Gift
 // picture out of it; the more coins they've sent today, the bigger it gets.
-// The top gifter of this live (by TikTok room) wears the crown, and their cat
-// never wanders off. Totals come from Gift history, so reloading the overlay
-// or restarting the server mid-stream doesn't reset anyone.
+// The top gifter of this live (by TikTok room) wears the crown. A cat stays
+// on screen for the rest of the stream -- going quiet doesn't send it away.
+// Totals come from Gift history, so reloading the overlay or restarting the
+// server mid-stream doesn't reset anyone.
 //
 // Query params:
 //   coins   -- Gift coins a viewer needs today before their cat appears
@@ -15,7 +16,6 @@
 //              matched to a TikTok account -- and their message is the bubble.
 //   max     -- most walkers on screen at once (5-80, default 30); past that
 //              the one quiet the longest leaves to make room
-//   idle    -- minutes without chatting before a walker leaves (1-60, default 10)
 //   style   -- "sprite" (default): Carysaurus' pixel-art black cat, recoloured;
 //              "svg": the cats drawn in code below
 //   size    -- cat height in px (32-192; sprite default 72, snapped to half
@@ -33,7 +33,6 @@ const donorKey = (name) => DONOR_PREFIX + String(name || "").trim().toLowerCase(
 const isDonor = (key) => key.startsWith(DONOR_PREFIX);
 const clamp = (v, lo, hi, dflt) => (Number.isFinite(v) && v > 0 ? Math.min(hi, Math.max(lo, v)) : dflt);
 const MAX_WALKERS = clamp(Number(params.get("max")), 5, 80, 30);
-const IDLE_MS = clamp(Number(params.get("idle")), 1, 60, 10) * 60 * 1000;
 const STYLE = params.get("style") === "svg" ? "svg" : "sprite";
 // Carysaurus "Black Cat" (free pack): one strip per animation, 48px frames,
 // facing right -- walking left just mirrors it.
@@ -479,18 +478,6 @@ function tick(now) {
 }
 requestAnimationFrame(tick);
 
-// Quiet viewers wander off.
-setInterval(() => {
-  const cutoff = Date.now() - IDLE_MS;
-  let removed = false;
-  for (const w of walkers.values()) {
-    if (w.lastSeen < cutoff && w.key !== crownKey) {
-      removeWalker(w);
-      removed = true;
-    }
-  }
-  if (removed) updateCrown();
-}, 15000);
 
 // ---------------------------------------------------------------- start
 

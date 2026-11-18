@@ -1543,13 +1543,15 @@ if (MOCK_MODE) {
     }
   });
 
-  tiktokConnection.on(WebcastEvent.GIFT, (data) => {
-    // Streakable gifts (gift.type === 1) re-fire on every tap while the
-    // sender holds the button, with a rising repeatCount. Only broadcast
-    // once the streak actually ends (repeatEnd === 1) so we announce the
-    // final combo instead of spamming one line per tap.
-    if (data.gift?.type === 1 && data.repeatEnd !== 1) return;
+  // Streaks still waiting for their repeatEnd, keyed per sender + gift + combo
+  // group. TikTok doesn't always send the closing repeatEnd message (seen
+  // while a LinkMic/co-host session is running), so a streak that goes quiet
+  // is flushed with its last known repeatCount instead of vanishing.
+  const STREAK_IDLE_MS = 8000;
+  const pendingStreaks = new Map();
+  const flushedStreaks = new Set();
 
+  function emitGift(data) {
     const message = {
       type: 'gift',
       ...tiktokViewer(data),
@@ -1560,6 +1562,38 @@ if (MOCK_MODE) {
     };
     console.log(`${message.nickname} sent ${message.giftName} x${message.repeatCount}`);
     emitLiveEvent(message);
+  }
+
+  tiktokConnection.on(WebcastEvent.GIFT, (data) => {
+    // Streakable gifts (gift.type === 1) re-fire on every tap while the
+    // sender holds the button, with a rising repeatCount. Only broadcast
+    // once the streak actually ends (repeatEnd === 1) so we announce the
+    // final combo instead of spamming one line per tap.
+    if (data.gift?.type !== 1) return emitGift(data);
+
+    const key = `${data.user?.userId}:${data.giftId}:${data.groupId}`;
+    const pending = pendingStreaks.get(key);
+    if (pending) clearTimeout(pending.timer);
+
+    if (data.repeatEnd === 1) {
+      pendingStreaks.delete(key);
+      if (flushedStreaks.delete(key)) {
+        // Already announced by the idle flush; announcing again would
+        // double-count the diamonds.
+        liveLog('gift-streak', { event: 'late-end-ignored', key, repeatCount: data.repeatCount });
+        return;
+      }
+      return emitGift(data);
+    }
+
+    const timer = setTimeout(() => {
+      pendingStreaks.delete(key);
+      flushedStreaks.add(key);
+      setTimeout(() => flushedStreaks.delete(key), 60_000);
+      liveLog('gift-streak', { event: 'idle-flush', key, user: tiktokHandle(data.user), repeatCount: data.repeatCount });
+      emitGift(data);
+    }, STREAK_IDLE_MS);
+    pendingStreaks.set(key, { timer });
   });
 
   tiktokConnection.on(WebcastEvent.MEMBER, (data) => {
